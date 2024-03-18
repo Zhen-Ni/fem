@@ -1,810 +1,459 @@
 #!/usr/bin/env python3
 
-"""dataset provides a interface for transfer data between different programs 
-by using the VTK file format.
-"""
+from __future__ import annotations
+import abc
+from typing import overload, Type, Generic, TypeVar, Optional, \
+    SupportsIndex, SupportsFloat, SupportsInt
+from collections.abc import Sequence
+import numpy as np
+import numpy.typing as npt
 
-import os
-import os.path
-import struct
-import base64
-import zlib
-import xml.etree.ElementTree as ET
+from .common import CellType, SequenceView, Readonly, InhertSlotsABCMeta, \
+    XYZBase
+
+try:
+    # Available for sys.version > "3.11".
+    from typing import Self
+except ImportError:
+    Self = TypeVar('Self')
 
 
-__all__ = ['Point', 'Cell', 'Field', 'ScalarField', 'VectorField', 'DataSet',
-           'dumppvd','dumpvtu', 'dumpvtk']
+__all__ = ('Point', 'Points',
+           'CellType', 'Vertex', 'Line', 'Quad', 'Hexahedron', 'Cells',
+           'ScalarField', 'VectorField',
+           'Dataset')
 
 
-VTK_VERTEX = 1
-VTK_LINE = 3
-VTK_QUAD = 9
+T = TypeVar('T')
 
-class Point():
-    """Point class for Dataset object.
-    
-    The instance of the Point class represents a point in the 3-D space.
-    
-    Parameters
-    ----------
-    *args: arguments
-        The `Point` class can be instantiated with 1 or 3 arguments. The 
-        following gives the number of input arguments and their interpretation:
-            
-            * 1: iterable with three elements representing the coordinate of
-                 the x, y and z axis
-            * 3: coordinate of the point (x, y and z)
+
+class DatasetBase(Sequence,
+                  Readonly,
+                  Generic[T],
+                  metaclass=InhertSlotsABCMeta):
+    """Base class for Points, Nodes, Fields, etc...
+
+    This is a wrapper for `SequenceView` type, which is immutable and
+    can be used to store field information in fem.
     """
-    
-    def __init__(self, *args):
-        try:
-            if len(args) == 1:
-                x, y, z = args[0]
+
+    __slots__ = '__storage'
+
+    @abc.abstractmethod
+    def __init__(self, storage: list[T]):
+        """We'd like to take full control of `storage`, so make sure
+        `storage` is copied in the derived class, so that it has no
+        reference outside the class.
+        """
+        self.__storage = SequenceView(storage)
+
+    @abc.abstractmethod
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__} object with {len(self)} data"
+
+    def __str__(self) -> str:
+        header = repr(self) + ':\n'
+        body = '\n'.join([f'{i}\t{line}' for i, line in enumerate(self)])
+        ending = ''
+        return header + body + ending
+
+    @overload
+    def __getitem__(self, index: SupportsIndex) -> T: ...
+
+    @overload
+    def __getitem__(self: Self,
+                    index: slice | Sequence[SupportsIndex]) -> Self: ...
+
+    def __getitem__(self, index):
+        if isinstance(index, SupportsIndex):
+            return self.__storage[index]
+        elif isinstance(index, (slice, Sequence)):
+            return self.__class__(self.__storage[index])
+        raise TypeError(
+            f'{self.__class__.__name__} indices must be integers,'
+            f' slices, or a sequence of int, not {type(index)}')
+
+    def __len__(self) -> int:
+        return len(self.__storage)
+
+    def __eq__(self, other) -> bool:
+        if not type(self) == type(other):
+            return False
+        if len(self) != len(other):
+            return False
+        for p1, p2 in zip(self, other):
+            if p1 != p2:
+                return False
+        return True
+
+    def to_list(self) -> list[T]:
+        return list(self)
+
+
+class Point(XYZBase):
+    def __repr__(self):
+        return f"Point: ({self.x}, {self.y}, {self.z})"
+
+    def coordinates(self) -> tuple[float, float, float]:
+        return self.x, self.y, self.z
+
+
+class Points(DatasetBase[Point]):
+    """Class for storing the nodes of a mesh."""
+
+    def __init__(self, point_list: Sequence[Point]):
+        # Make sure point_list is only itered once in case it is an iterator.
+        storage_list = []
+        for p in point_list:
+            if isinstance(p, Point):
+                storage_list.append(p)
             else:
-                x, y, z = args
-        except ValueError:
-            raise ValueError('Point() takes 1 or 3 positional arguments')
-        self._coordinate = (x, y, z)
-    
-    def __repr__(self):
-        return "Point: {coor}".format(coor=self._coordinate)
-    
-    @property
-    def coordinate(self):
-        return self._coordinate
-    @property
-    def x(self):
-        return self._coordinate[0]
-    @property
-    def y(self):
-        return self._coordinate[1]
-    @property
-    def z(self):
-        return self._coordinate[2]
+                raise TypeError('elements in point_list should be `Point`,'
+                                f' got {type(p)}')
+        super().__init__(storage_list)
 
-class Cell:
-    """Cell class for Dataset object.
-    
-    The object of the Cell class represents a cell (or element). It contains
-    information of the cell type and the node indexes of the cell. Users may
-    refer to VTK file formats for information about the cell types.
-    
-    Paramteres
-    ----------
-    points: iterable
-        List of the indexes of vertices (Point instances) that forms the cell.
-    cell_type: int
-        Type of the cell. Users may refer to VTK file formats for more
-        information.
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__} object with {len(self)} points"
+
+    @staticmethod
+    def from_array(array: npt.ArrayLike) -> Points:
+        """Generate a Points object from the given array.
+
+        The array should be 2-dimensional and the number of columns
+        should be 3, which represents the x-, y- and z- coordinates,
+        respectively.
+
+        Parameters
+        ----------
+        array : npt.ArrayLike
+            The array containing the coordinates.
+        """
+        return Points([Point(*row) for row in np.asarray(array)])
+
+    def to_array(self) -> npt.NDArray[float]:
+        return np.array([[p.x, p.y, p.z] for p in self])
+
+    @property
+    def x(self) -> list[float]:
+        return [p.x for p in self]
+
+    @property
+    def y(self) -> list[float]:
+        return [p.y for p in self]
+
+    @property
+    def z(self) -> list[float]:
+        return [p.z for p in self]
+
+
+class Cell(Readonly, abc.ABC):
+    """A single cell of specific type.
+
+    The cell types are the same with that of VTK types.
     """
-    def __init__(self, points, cell_type):
-        self._points = tuple(points)
-        self._cell_type = int(cell_type)
-    
-    def __repr__(self):
-        return ("Cell: {points}, cell_type = {cell_type}"
-                .format(points=self._points, cell_type=self._cell_type))
-    
-    def cell_size(self):
-        """Return the number of vertics that forms the cell."""
-        return len(self._points)
-    
-    @property
-    def points(self):
-        return self._points
-    
-    @property
-    def cell_type(self):
-        return self._cell_type
-    
 
-class Field:
+    __slots__ = '__nodes',
+
+    def __init__(self, *nodes: SupportsInt):
+        if len(nodes) != self.size:
+            raise TypeError(f'expect {self.size} nodes, got {len(nodes)}')
+        self.__nodes = tuple((int(i) for i in nodes))
+
+    @abc.abstractproperty
+    def id(self) -> CellType: ...
+
+    @abc.abstractproperty
+    def size(self) -> int: ...
+
+    @property
+    def nodes(self) -> tuple[int, ...]:
+        return self.__nodes
+
+    def __repr__(self) -> str:
+        return f"Cell: {self.__class__.__name__}{self.nodes}"
+
+
+class Vertex(Cell):
+    id = CellType.VERTEX
+    size = 1
+
+
+class Line(Cell):
+    """Two-node linear line cell.
+
+    The nodes are as follows:
+    0--1
+    """
+    id = CellType.LINE
+    size = 2
+
+
+class Quad(Cell):
+    """Four-node linear facet cell.
+
+    The nodes are as follows:
+    3--2
+    |  |
+    0--1
+    """
+    id = CellType.QUAD
+    size = 4
+
+
+class Tetra(Cell):
+    r"""Four-node linear volume cell.
+
+    The nodes are as follows:
+           3
+         / | \
+       /   |   \
+     /     |     \
+    2------+------1
+     \     |     /
+       \   |   /
+         \ | /
+           0
+    """
+    id = CellType.TETRA
+    size = 4
+
+
+class Hexahedron(Cell):
+    """Eight-node linear volume cell.
+
+    The nodes are as follows:
+       7-----6
+      /|    /|
+     / |   / |
+    4--+--5  |
+    |  3--+--2
+    | /   | /
+    |/    |/
+    0-----1
+    """
+    id = CellType.HEXAHEDRON
+    size = 8
+
+
+class Cells(DatasetBase[Cell]):
+    """Class for stroing cells info of a mesh.
+
+    Each cell is formed by connection of its nodes. The sequence
+    of the nodes are defined the same as that of VTK cells. The nodes
+    are stored by their node ids.
+    """
+
+    def __init__(self, cell_list: Sequence[Cell]):
+        # Make sure point_list is only itered once in case it is an iterator.
+        storage_list = []
+        for c in cell_list:
+            if isinstance(c, Cell):
+                storage_list.append(c)
+            else:
+                raise TypeError('elements in point_list should be `Cell`,'
+                                f' got {type(c)}')
+        super().__init__(storage_list)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__} object with {len(self)} cells"
+
+    @staticmethod
+    def from_array(cell_type: Type[Cell],
+                   nodes_array: npt.ArrayLike) -> Cells:
+        """Generate an Cells object from an array.
+
+        This method is used to get `Cell`s object if the cells are of
+        the same type. Each row in node_array represents a cell. The
+        number of columns of nodes_array should be the same with
+        cell_type.size.
+
+        Parameters
+        ----------
+        cell_type : Subclass of Cell
+            Define cell type.
+        nodes_array : npt.ArrayLike
+            Array defining the nodes of the cells.
+        """
+        return Cells([cell_type(*i) for i in np.asarray(nodes_array)])
+
+    def same_cell_type(self) -> Type[Cell] | None:
+        """Get cell type if all cells are of the same type.
+
+        If all cells are the same type, return a single cell
+        type. Return None if cells are of different types or
+        the `Cells` object is empty.
+        """
+        if len(self) == 0:
+            return None
+        t = type(self[0])
+        for c in self:
+            if t != type(c):
+                return None
+        return t
+
+    def to_array(self) -> npt.NDArray:
+        res = np.array([list(cell.nodes) for cell in self])
+        if res.dtype == object:
+            raise TypeError('all cells should have same number of nodes')
+        return res
+
+
+class Field(DatasetBase[T]):
     """Base class for field data in the Dataset.
-    
-    An instance of the Field class defined a named field for point data or cell
-    data. The field data can should be iterable with a constant length. For 
-    scalar field data, users may use ScalarField instead.
-    
+
+    An instance of the `Field` class defines a named field for point
+    data or cell data. The field data is a sequence of scalars or
+    vectors. Users should use `ScalarField` or `VectorField` for
+    instantiation `Field` objects.
+
     Parameters
     ----------
-    data_name: string
+    data_name : string
         Name of the field.
-    data: iterable
+    data : iterable
         Data for each point or cell.
-    ncomponents: int
-        Length of the field data for each point or cell.
-    
+
     See Alse
     --------
     ScalarField, VectorField
     """
-    def __init__(self, data_name, data, ncomponents):
-        self._data_name = data_name
-        self._data = tuple(data)
-        self._ncomponents = int(ncomponents)
 
-    def __repr__(self):
-        return ("Field: {name}".format(name=self._data_name))
-
-    def size(self):
-        return len(self._data)
-
-    @property
-    def data_name(self):
-        return self._data_name
-    
-    @property
-    def data(self):
-        return self._data
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__} object with {len(self)} data"
 
 
-class ScalarField(Field):
-    """Class for field data in the Dataset.
-    
-    An instance of the Field class defined a named field for point data or cell
-    data. The field data can should be scalar.
-    
+class ScalarField(Field[float]):
+    """Field for scalar data.
+
     Parameters
     ----------
-    data_name: string
-        Name of the field.
-    scalar: iterable
+    scalar : iterable
         Data for each point or cell.
 
     See Alse
     --------
     VectorField
     """
-    def __init__(self, data_name, scalar):
-        super().__init__(data_name, scalar, -1)
 
-    def __repr__(self):
-        return ("Scalar Field: {name}".format(name=self._data_name))
-    
-    @property
-    def scalars(self):
-        return self._data
+    def __init__(self, scalars: Sequence[SupportsFloat]):
+        # Make sure point_list is only itered once in case it is an iterator.
+        storage_list = []
+        for p in scalars:
+            try:
+                storage_list.append(float(p))
+            except (TypeError, ValueError):
+                raise TypeError('elements in scalars should be float,'
+                                f' got {type(p)}')
+        super().__init__(storage_list)
 
-class VectorField(Field):
-    """Class for field data in the Dataset.
-    
-    An instance of the Field class defined a named field for point data or cell
-    data. The field data can should be iterable with a constant length. For 
-    scalar field data, users may use ScalarField instead.
-    
+
+class VectorField(Field[tuple[float, ...]]):
+    """ Field for vector data.
+
     Parameters
     ----------
-    data_name: string
-        Name of the field.
-    data: iterable
+    data : iterable
         Data for each point or cell.
-    ncomponents: int, optional
+    dimension : int, optional
         Length of the field data for each point or cell. (default to 3)
-    
+
     See Alse
     --------
     ScalarField
     """
-    def __init__(self, data_name, vectors, ncomponents=3):
-        super().__init__(data_name, vectors, ncomponents)
 
-    def __repr__(self):
-        return ("Vector Field: {name}".format(name=self._data_name))
-    
+    __slots__ = ('_dimension',)
+
+    def __init__(self,
+                 vectors: Sequence[Sequence[SupportsFloat]],
+                 dimension: SupportsInt = 3):
+        _dimension = int(dimension)
+        # Make sure point_list is only itered once in case it is an iterator.
+        storage_list = []
+        for v in vectors:
+            try:
+                elem = [float(i) for i in v]
+                if not len(elem) == _dimension:
+                    raise ValueError('shape of `vectors` not correct')
+                storage_list.append(tuple(elem))
+            except Exception:
+                raise TypeError('elements in vectors should be'
+                                ' a sequence of float')
+        super().__init__(storage_list)
+        self._dimension = _dimension
+
     @property
-    def vectors(self):
-        return self._data
+    def dimension(self) -> int:
+        return self._dimension
 
-    @property
-    def ncomponents(self):
-        return self._ncomponents
-    
 
-class DataSet:
+class Dataset:
     """Class for mesh geometry and the corresponding field data.
-    
-    DataSet class corresponds to VTK file formats using unstructured mesh. It 
+
+    Dataset class corresponds to VTK file formats using unstructured mesh. It
     stores the points and cells to construct the geometry. Field data can be
     added to the instances to represent the point data or cell data.
-    
+
     Parameters
     ----------
-    points: iterable
-        Iterable object containing Point instances.  
-    cells: iterable
-        Iterable object containing Cell instances.
-    title: string, optional
-        The title for the VTK file. Should be no longer than 255 characters.
-    time: float, optional
+    points : Points
+        The nodes of a mesh.
+    cells : Cells, optional
+        The connectivity of a mesh.
+    title : string, optional
+        The title of the dataset.
+    time : float, optional
         Additional information for time step.
     """
-    def __init__(self, points=None, cells=None, title='', time=None):
-        self._title = ''
-        self._time = time
-        self._points = []
-        self._cells = []
-        self._point_data = {}
-        self._cell_data = {}
-        
-        self.set_title(title)
-        if points is not None:
-            self.points.extend(points)
-        if cells is not None:
-            self.cells.extend(cells)   
-    
-    def set_title(self, title):
-        """Set the title for the dataset."""
-        title = str(title)
-        if len(title) > 255:
-            raise ValueError('title should be no longer than 255 characters')
-        self._title = title
-    
+
+    def __init__(self,
+                 points: Points,
+                 cells: Optional[Cells] = None,
+                 title: str = '',
+                 time: Optional[SupportsFloat] = None):
+        self._points = points
+        self._cells = Cells([]) if cells is None else cells
+
+        # self._title and self._time are set by attrbute setters.
+        self.title = title
+        self.time = time
+
+        self._point_data: dict[str, Field] = {}
+        self._cell_data: dict[str, Field] = {}
+
     @property
     def title(self):
         return self._title
-    
+
+    @title.setter
+    def title(self, title: str):
+        """Set the title for the dataset."""
+        self._title = str(title)
+
     @property
-    def time(self):
+    def time(self) -> Optional[float]:
         return self._time
-    
+
     @time.setter
-    def time(self, time):
-        self._time = time
-    
+    def time(self, time: Optional[SupportsFloat]):
+        self._time = None if time is None else float(time)
+
     @property
-    def points(self):
+    def points(self) -> Points:
         """List of points."""
         return self._points
-    
+
     @property
-    def cells(self):
+    def cells(self) -> Cells:
         """List of cells."""
         return self._cells
-    
+
     @property
-    def point_data(self):
+    def point_data(self) -> dict[str, Field]:
         """List of point data for the dataset."""
         return self._point_data
-    
+
     @property
-    def cell_data(self):
+    def cell_data(self) -> dict[str, Field]:
         """List of cell data for the dataset."""
         return self._cell_data
-
-
-
-def dumppvd(datasets, filename, path=None):
-    """Write the datasets into pvd format. (paraview data format)
-    
-    A file named "`filename`.pvd" and its corresponding folder will be written
-    to the disk in `path`.
-    
-    Parameters
-    ----------
-    datasets: DataSet object or a list of DataSet objects
-        Dataset to be written.
-    
-    filename: string
-        File to be written. If filename is None, the pvd file will not be
-        written to the disk.
-    
-    path: string, optional
-        Path of the file. (default to None)
-    
-    Returns
-    -------
-    pvd: Element
-        Element containing information in pvd file.
-    
-    Side Effects
-    ------------
-    Write files to the disk.
-    """
-    try:
-        iter(datasets)
-    except TypeError:
-        datasets = [datasets]
-    if path is None:
-        path = ''
-    try:
-        os.mkdir(os.path.join(path,filename))
-    except FileExistsError:
-        pass
-    dumpvtu(datasets, filename, os.path.join(path, filename))
-    pvd_xml = _dumppvd_helper(datasets, filename, path)
-    return pvd_xml
-    
-        
-
-def _dumppvd_helper(datasets, filename, path):
-    """Write the pvd file.
-        
-    Parameters
-    ----------
-    datasets: a list of DataSet objects
-        Dataset to be written.
-
-    Returns
-    -------
-    pvd: Element
-        Element containing information in pvd file.
-    """
-    pvd_xml = ET.Element("VTKFile", attrib={'type':'Collection',
-                                            'byte_order':'LittleEndian'})
-    collection = ET.SubElement(pvd_xml, 'Collection')
-    file_prefix = os.path.join(filename,filename)
-    for i, dataset in enumerate(datasets):
-        ds = ET.SubElement(collection, 'DataSet',
-                           attrib={'timestep':'{}'.format(dataset.time),
-                                   'part':'0',
-                                   'file':file_prefix+'-{}.vtu'.format(i)})
-        
-    et = ET.ElementTree(pvd_xml) #生成文档对象
-    et.write(os.path.join(path, filename)+'.pvd',
-             encoding="utf-8",xml_declaration=True)
-    return pvd_xml
-
-def dumpvtu(dataset, filename=None, path=None, compress=True):
-    """Write the dataset into VTK XML format.
-    
-    If `dataset` is a DataSet object, a string will be returned, and a file
-    named "`filename`.vtu" will be written to the disk if `filename` is not
-    None. if `dataset` is a list of DataSet objects, a list of string will be
-    returned, and a list of file named "`filename`-i.vtu" will be written to
-    the disk if `filename` is not None where i is the index of the 
-    corresponding dataset.
-    
-    Parameters
-    ----------
-    dataset: DataSet object or a list of DataSet objects
-        Dataset to be written.
-    filename: string, optional
-        File to be written. If filename is None, the vtk file will not be
-        written to the disk. (default to None)
-    path: string, optional
-        Path of the file. (default to None)
-    compress: bool, optional
-        Whether to compress binary data. (default to True)
-    
-    Returns
-    -------
-    vtu_xml: Element
-        Element containing information in `dataset`.
-    
-    Side Effects
-    ------------
-    Write a file or a list of files to the disk if `filename` is not None
-    """
-    if filename is not None and path is not None:
-        filename = os.path.join(path, filename)
-    try:
-        res = []
-        for i,ds in enumerate(dataset):
-            res.append(_dumpvtu_helper(ds, filename+'-{i}'.format(i=i),
-                                       compress))
-    except TypeError:
-        res = _dumpvtu_helper(dataset, filename, compress)
-    return res
-
-
-def _dumpvtu_helper(dataset, filename, compress):
-    """Process only one dataset."""
-    vtu_xml = _dumpvtu_dumper(dataset, compress)
-    if filename is not None:
-        et = ET.ElementTree(vtu_xml) #生成文档对象
-        et.write(filename+'.vtu', encoding="utf-8",xml_declaration=True)
-    return vtu_xml
-        
-
-def _dumpvtu_dumper(dataset, compress):
-    """Write the dataset into XML format.
-    
-    Note that only real part of the field data will be written to the output.
-    
-    Parameters
-    ----------
-    dataset: DataSet object
-        Dataset to be written.
-    compress: bool
-        Whether to compress binary data.
-    
-    Returns
-    -------
-    vtu_xml: Element
-        Element containing information in `dataset`.
-    """
-    appended_data = bytearray()
-    vtu_xml = ET.Element("VTKFile", attrib={'type':'UnstructuredGrid',
-                                            'byte_order':'LittleEndian'})
-    if compress:
-        vtu_xml.set('compressor','vtkZLibDataCompressor')
-        _pack_list = _pack_list_compressed
-    else:
-        _pack_list = _pack_list_plain
-        
-    unstructuredgrid = ET.SubElement(vtu_xml, 'UnstructuredGrid')
-    piece = ET.SubElement(unstructuredgrid, 'Piece',
-              attrib={'NumberOfPoints':'{:d}'.format(len(dataset.points)),
-                      'NumberOfCells':'{:d}'.format(len(dataset.cells))})
-    
-    # the order of the elements in `piece`: PointData, CellData, Points, Cells
-    
-    # PointData
-    pointdata = ET.SubElement(piece, 'PointData')
-    for key,field in dataset.point_data.items():
-        dataarray = ET.SubElement(pointdata, 'DataArray',
-                                  attrib={'Name':field.data_name,
-                                          'type':'Float64',
-                                          'format':'appended',
-                                          'offset':'{:d}'.format(len(appended_data))})
-        # scalars
-        if type(field) == ScalarField:
-            data = [i.real for i in field.data]
-        # vectors
-        else:
-            dataarray.set('NumberOfComponents','{:d}'.format(field.ncomponents))
-            data = []
-            [data.extend([i.real for i in d]) for d in field.data]
-        appended_data.extend(_pack_list('<d', data))
-        
-    # CellData
-    celldata = ET.SubElement(piece, 'CellData')
-    for key,field in dataset.cell_data.items():
-        dataarray = ET.SubElement(celldata, 'DataArray',
-                                  attrib={'Name':field.data_name,
-                                          'type':'Float64',
-                                          'format':'appended',
-                                          'offset':'{:d}'.format(len(appended_data))})
-        # scalars
-        if type(field) == ScalarField:
-            data = [i.real for i in field.data]
-        # vectors
-        else:
-            dataarray.set('NumberOfComponents','{:d}'.format(field.ncomponents))
-            data = []
-            [data.extend([i.real for i in d]) for d in field.data]
-        appended_data.extend(_pack_list('<d', data))
-        
-    # Points
-    points = ET.SubElement(piece, 'Points')
-    dataarray = ET.SubElement(points, 'DataArray',
-                              attrib={'type':'Float64',
-                                      'NumberOfComponents':'3',
-                                      'format':'appended',
-                                      'offset':'{:d}'.format(len(appended_data))})
-    data = []
-    [data.extend(d.coordinate) for d in dataset.points]
-    appended_data.extend(_pack_list('<d', data))
-    
-    # Cells
-    # Cells contain three elements: connectivity, offsets and types
-    cells = ET.SubElement(piece, 'Cells')
-    # conncectivity
-    dataarray = ET.SubElement(cells, 'DataArray',
-                              attrib={'type':'Int32',
-                                      'Name':'connectivity',
-                                      'format':'appended',
-                                      'offset':'{:d}'.format(len(appended_data))})
-    data = []
-    [data.extend(p) for p in [c.points for c in dataset.cells]]
-    appended_data.extend(_pack_list('<i', data))
-    # offsets
-    dataarray = ET.SubElement(cells, 'DataArray',
-                              attrib={'type':'Int32',
-                                      'Name':'offsets',
-                                      'format':'appended',
-                                      'offset':'{:d}'.format(len(appended_data))})
-    data = []
-    offset = 0
-    for c in dataset.cells:
-        offset += len(c.points)
-        data.append(offset)
-    appended_data.extend(_pack_list('<i', data))
-    # types
-    dataarray = ET.SubElement(cells, 'DataArray',
-                              attrib={'type':'UInt8',
-                                      'Name':'types',
-                                      'format':'appended',
-                                      'offset':'{:d}'.format(len(appended_data))})
-    data = [c.cell_type for c in dataset.cells]
-    appended_data.extend(_pack_list('<B', data))
-    # Appended data
-    ET.SubElement(vtu_xml, 'AppendedData',
-                  attrib={'encoding':'base64'}).text = '_' + appended_data.decode()
-    
-    return vtu_xml
-    
-def _pack_list_plain(fmt, data):
-    """Pack data into binary form and encode it using base64.
-    
-    The resulting data contains two parts. The first part is a 32-bit interger
-    containg the length of the packed data (in bytes), The second part is the
-    packed data. The two parts are encoded seperately.
-    
-    The pseudo code is as follows:  
-        
-    int32 = length( data );  
-    output = base64-encode( int32 ) + base64-encode( data );
-    
-    Parameters
-    ----------
-    fmt: string
-        Format of the binary data. See struct for more details.
-    data: list
-        New data to be packed.
-    
-    Returns
-    -------
-    bdata: bytearray
-        Packed data.
-    """
-    bdata2 = bytearray()    # data
-    for d in data:
-        bdata2.extend(struct.pack(fmt,d))
-    bdata1 = struct.pack('<i',len(bdata2))   # length of data
-    bdata1 = base64.encodebytes(bdata1)
-    bdata2 = base64.encodebytes(bdata2)
-    bdata = bdata1 + bdata2
-    bdata = b''.join(bdata.split(b'\n'))
-    return bdata
-
-
-def _pack_list_compressed(fmt, data, level=-1):
-    """Pack data into compressed binary form and encode it using base64.
-    
-    The resulting data contains two parts. The first part is a 32-bit interger
-    array (header). The second part is the packed data. The two parts are
-    encoded seperately.
-    
-    The pseudo code is as follows:  
-        
-    int32[0] = 1;
-    int32[1] = length( data ); 
-    int32[2] = length( data ); 
-    zdata = compress( data );
-    int32[3] = length( zdata );
-    output = base64-encode( int32 ) + base64-encode( zdata );
-    
-    Parameters
-    ----------
-    fmt: string
-        Format of the binary data. See struct for more details.
-    data: list
-        New data to be packed.
-    level: int (optional)
-        Compression level, in 0-9.
-    Returns
-    -------
-    bdata: bytearray
-        Packed data.
-    """
-    bdata2 = bytearray()    # data
-    for d in data:
-        bdata2.extend(struct.pack(fmt,d))
-    bdata1 = bytearray()   # header
-    bdata1.extend(struct.pack('<i',1))
-    bdata1.extend(struct.pack('<i',len(bdata2)))
-    bdata1.extend(struct.pack('<i',len(bdata2)))
-    bdata2 = zlib.compress(bdata2)
-    bdata1.extend(struct.pack('<i',len(bdata2)))
-    bdata1 = base64.encodebytes(bdata1)
-    bdata2 = base64.encodebytes(bdata2)
-    bdata = bdata1 + bdata2
-    bdata = b''.join(bdata.split(b'\n'))
-    return bdata
-
-
-def dumpvtk(dataset, filename=None, path=None):
-    """Write the dataset into legency VTK format.
-    
-    If `dataset` is a DataSet object, a string will be returned, and a file
-    named "`filename`.vtk" will be written to the disk if `filename` is not
-    None. if `dataset` is a list of DataSet objects, a list of string will be
-    returned, and a list of file named "`filename`-i.vtk" will be written to
-    the disk if `filename` is not None where i is the index of the 
-    corresponding dataset.
-    
-    Parameters
-    ----------
-    dataset: DataSet object or a list of DataSet objects
-        Dataset to be written.
-    
-    filename: string, optional
-        File to be written. If filename is None, the vtk file will not be
-        written to the disk. (default to None)
-    
-    path: string, optional
-        Path of the file. (default to None)
-    
-    Returns
-    -------
-    slf: string or a list of strings
-        Dataset in legency VTK format.
-    
-    Side Effects
-    ------------
-    Write a file or a list of files to the disk if `filename` is not None
-    """
-    if filename is not None and path is not None:
-        filename = os.path.join(path, filename)
-    try:
-        res = []
-        for i,ds in enumerate(dataset):
-            res.append(_dumpvtk_helper(ds, filename+'-{i}'.format(i=i)))
-    except TypeError:
-        res = _dumpvtk_helper(dataset, filename)
-    return res
-
-
-def _dumpvtk_helper(dataset, filename):
-    """Process only one dataset."""
-    slf = _dumpvtk_dumper(dataset)
-    if filename is not None:
-        with open(filename+'.vtk', 'w') as file:
-            file.write(slf)
-    return slf
-            
-            
-def _dumpvtk_dumper(dataset):
-    """Write the dataset into legency VTK format.
-    
-    Note that only real part of the field data will be written to the output.
-    
-    Parameters
-    ----------
-    dataset: DataSet object
-        Dataset to be written.
-    
-    Returns
-    -------
-    slf: string
-        Dataset in legency VTK format.
-    """
-    slf = []
-    # write the head
-    slf.append('# vtk DataFile Version 3.0')
-    slf.append(dataset.title)
-    slf.append('ASCII')
-    slf.append('DATASET UNSTRUCTURED_GRID')
-    # write the points
-    slf.append('POINTS {} double'.format(len(dataset.points)))
-    for point in dataset.points:
-        slf.append('{} {} {}'.format(*point.coordinate))
-    # write the cells
-    size = sum([c.cell_size()+1 for c in dataset.cells])
-    slf.append('CELLS {} {}'.format(len(dataset.cells), size))
-    for cell in dataset.cells:
-        slf.append(' '.join(['{:d}'.format(cell.cell_size())] +
-                            ['{:d}'.format(p) for p in cell.points]))
-    
-    slf.append('CELL_TYPES {}'.format(len(dataset.cells)))
-    for cell in dataset.cells:
-        slf.append('{:d}'.format(cell.cell_type))
-    # write point data
-    slf.append('POINT_DATA {}'.format(len(dataset.points)))
-    for key,field in dataset.point_data.items():
-        # scalars
-        if type(field) == ScalarField:
-            slf.append('SCALARS {} double'.format(field.data_name))
-            slf.append('LOOKUP_TABLE default')
-            for d in field.data:
-                slf.append('{}'.format(d.real))
-###############################################################################
-#        ## Deprecated                                                        #
-#        # vectors                                                            #
-#        elif type(field) == VectorField:                                     #
-#            slf.append('VECTORS {} double'.format(field.data_name))          #
-#            for d in field.data:                                             #
-#                slf.append('{} {} {}'.format(*d))                            #
-###############################################################################
-        # vectors (VectorField or Field), use field expression in VTK
-        else:
-            slf.append('FIELDS {} 1'.format(key))
-            slf.append('{} {} {} double'.format(field.data_name,
-                       field.ncomponents, field.size()))
-            for d in field.data:
-                slf.append(' '.join(['{}'.format(i.real) for i in d]))
-    # write cell data
-    slf.append('CELL_DATA {}'.format(len(dataset.cells)))
-    for key,field in dataset.cell_data.items():
-        # scalars
-        if type(field) == ScalarField:
-            slf.append('SCALARS {} double'.format(field.data_name))
-            slf.append('LOOKUP_TABLE default')
-            for d in field.data:
-                slf.append('{}'.format(d.real))
-###############################################################################
-#        ## Deprecated                                                        #
-#        # vectors                                                            #
-#        elif type(field) == VectorField:                                     #
-#            slf.append('VECTORS {} double'.format(field.data_name))          #
-#            for d in field.data:                                             #
-#                slf.append('{} {} {}'.format(*d))                            #
-###############################################################################
-        # vectors (VectorField or Field), use field expression in VTK
-        else:
-            slf.append('FIELDS {} 1'.format(key))
-            slf.append('{} {} {} double'.format(field.data_name,
-                       field.ncomponents, field.size()))
-            for d in field.data:
-                slf.append(' '.join(['{}'.format(i.real) for i in d]))
-    slf.append('')
-    return '\n'.join(slf)
-    
-    
-    
-if __name__ == '__main__':    
-    points = [(Point(0,0,0)),(Point(1,0,0)),(Point(2,0,0)),
-              (Point(0,1,0)),(Point(1,1,0)),(Point(2,1,0)),
-              (Point(1,2,0)),(Point(2,2,0))]
-    cells = [Cell([0,1,4,3],VTK_QUAD),Cell([1,2,5,4],VTK_QUAD),
-                  Cell([4,5,7,6],VTK_QUAD)]
-    
-    temp = ScalarField('temprature', [0,1,2,1,2,3,3,4])
-    disp = VectorField('displacement',[[0,0,0],[0,0,1],[0,0,0],
-                                       [0,0,1],[0,0,2],[0,0,1],
-                                       [0,0,1],[0,0,0]])
-    coor = VectorField('coordinate', [[0,0],[1,0],[2,0],
-                                      [0,1],[1,1],[2,1],
-                                      [1,2],[2,2]], 2)
-    dataset = DataSet(points, cells, 'test')
-    dataset.point_data['temp'] = temp
-    dataset.point_data['disp'] = disp
-    dataset.point_data['coor'] = coor
-    
-    density = ScalarField('density', [1,1.5,2])
-    dataset.cell_data['rho'] = density
-    
-    slf = dumpvtk(dataset)
-    with open('dataset-test.vtk','w') as f:
-        f.write(slf)
-        
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    

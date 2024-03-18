@@ -22,7 +22,7 @@ def get_mass_matrix_beam(nodes, elements, section, n1, **kwargs):
         e1 = r1 - r0
         l = norm(e1)
         # form the element mass matrix
-        Me = get_mass_matrix_beam_sigle_element_lumped_mass(section.rho,
+        Me = get_mass_matrix_beam_sigle_element_lumped_mass(section.material.rho,
                                                             section.A,
                                                             section.Ix, l)
         # transformation of coordinates
@@ -69,7 +69,7 @@ def get_stiffness_matrix_beam(nodes, elements, section, n1, **kwargs):
         e1 = r1 - r0
         l = norm(e1)
         # form the element mass matrix
-        Ke = get_stiffness_matrix_beam_sigle_element(section.E, section.G*section.torsion_coefficient,
+        Ke = get_stiffness_matrix_beam_sigle_element(section.material.E, section.material.G*section.torsion_coefficient,
                                                      section.kappa, section.A,
                                                      section.Ix, section.Iy,
                                                      section.Iz, l)

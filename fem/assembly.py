@@ -1,64 +1,86 @@
 #!/usr/bin/env python3
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, Collection, Optional, Literal, \
+    SupportsIndex
 
-import numpy as np
+from .common import SequenceView
+from .dataset import Points, Vertex, Line, Cell, Cells, Dataset
 
-from .dataset import *
+
+if TYPE_CHECKING:
+    from .part import Part
+    from scipy.sparse import csr_matrix
+
 
 class Assembly:
     """Assemble the parts into an assembly.
-    
+
     Each part of the assembly should have the same node list, whether they have
     been used in their element list.
-    
+
     Parameters
     ----------
-    parts: iterable
+    parts : Collection of Part objects
         Parts in the assembly. The parts should have the same node list.
     """
-    def __init__(self, parts):
-        if not np.iterable(parts):
-            parts = [parts]
 
-        nodes = parts[0].nodes
-        for p in parts[1:]:
-            if not (nodes == p.nodes).all():
-                raise ValueError('nodes array should be the same in each part')
-        self._nodes = nodes
-        self._parts = parts
-        self._stiffness_matrix = None
-        self._mass_matrix = None
-        self._damping_matrix = None
-        self._springs = []
-        self._masses = []
+    def __init__(self, parts: Collection[Part]):
+        if len(parts) == 0:
+            raise ValueError('assembly should contain at least one part')
+        parts_ = list(parts)
+        points = parts_[0].points
+        for p in parts_[1:]:
+            if not points == p.points:
+                raise ValueError(
+                    'points array should be the same in each part')
+        self._points = points
+        self._parts = parts_
+        self._stiffness_matrix: csr_matrix | None = None
+        self._mass_matrix: csr_matrix | None = None
+        self._damping_matrix: csr_matrix | None = None
+        # The format of `self._springs` is:
+        # list[tuple[stiffness, dof_index1, dof_index2]] if the spring
+        # is connected between two nodes.
+        # list[tuple[stiffness, dof_index1, None]] if spring is
+        # connected to the ground.
+        self._springs: list[tuple[float, int, int | None]] = []
+        # The format of `self._masses` is:
+        # list[tuple[mass, dof_index]]
+        self._masses: list[tuple[float, int]] = []
         self._is_initialized = False
 
     @property
-    def parts(self):
+    def parts(self) -> list[Part]:
         return self._parts
 
     @property
-    def nodes(self):
-        return self._nodes
+    def points(self) -> Points:
+        return self._points
 
-    def add_spring(self, k, node1, dof1, node2=None, dof2=None):
+    def add_spring(self,
+                   k: float,
+                   node1: int,
+                   dof1: int,
+                   node2: Optional[int] = None,
+                   dof2: Optional[int] = None) -> Assembly:
         """Add a spring to the assembly.
-        
+
         Users may define a spring connecting two nodes or connecting a node to
         the ground.
-        
+
         Parameters
         ----------
-        k: float
+        k : float
             Stiffness of the spring.
-        node1: int
+        node1 : int
             Index of the first node.
-        dof1: int
+        dof1 : int
             The degree of freedom of the first node.
-        node2: int, optional
+        node2 : int, optional
             Index of the second node. If node2 is None, the spring is connected
             to the ground. (default to None)
-        dof2: int, optional
+        dof2 : int, optional
             The degree of freedom of the second node. If dof2 is None, dof2 is
             the same as dof1. (default to None)
         """
@@ -72,35 +94,35 @@ class Assembly:
         return self
 
     @property
-    def springs(self):
-        return self._springs
+    def springs(self) -> SequenceView[tuple[float, int, int | None]]:
+        return SequenceView(self._springs)
 
-    def remove_spring(self, idx=None):
+    def remove_spring(self, idx: Optional[SupportsIndex] = None) -> Assembly:
         """Remove a spring or springs from the assembly.
-        
+
         Parameters
         ----------
-        idx: int, optional
-            Index of the spring to be removed. If `idx` is None, the all 
+        idx : int, optional
+            Index of the spring to be removed. If `idx` is None, the all
             springs will be removed. (default to None)
         """
         self._uninitialize()
         if idx is None:
-            self._springs = []
+            self._springs.clear()
         else:
             self._springs.pop(idx)
         return self
 
-    def add_mass(self, m, node, dof):
+    def add_mass(self, m: float, node: int, dof: int) -> Assembly:
         """Add a mass point to the assembly.
-        
+
         Parameters
         ----------
-        m: float
+        m : float
             The mass.
-        node: int
+        node : int
             The index of the node.
-        dof: int
+        dof : int
             The degree of freedom of the node.
         """
         self._uninitialize()
@@ -108,21 +130,21 @@ class Assembly:
         return self
 
     @property
-    def masses(self):
-        return self._masses
+    def masses(self) -> SequenceView[tuple[float, int]]:
+        return SequenceView(self._masses)
 
-    def remove_mass(self, idx=None):
+    def remove_mass(self, idx: Optional[SupportsIndex] = None) -> Assembly:
         """Remove mass point from the assembly.
-        
+
         Parameters
         ----------
-        idx: int, optional
+        idx : int, optional
             Index of the mass to be removed. If `idx` is None, all the mass
             points will be removed. (default to None)
         """
         self._uninitialize()
         if idx is None:
-            self._masses = []
+            self._masses.clear()
         else:
             self._masses.pop(idx)
         return self
@@ -143,10 +165,10 @@ class Assembly:
         self._damping_matrix = self._get_damping_matrix()
         self._is_initialized = True
 
-    def _get_stiffness_matrix(self):
-        K = self._parts[0].K.tocsc().copy()
+    def _get_stiffness_matrix(self) -> csr_matrix:
+        K = self._parts[0].K.tocsr().copy()
         for p in self._parts[1:]:
-            K += p.K.tocsc()
+            K += p.K.tocsr()
         for k, dof1, dof2 in self._springs:
             if dof2 is None:
                 K[dof1, dof1] += k
@@ -157,85 +179,81 @@ class Assembly:
                 K[dof2, dof2] += k
         return K
 
-    def _get_mass_matrix(self):
-        M = self._parts[0].M.tocsc().copy()
+    def _get_mass_matrix(self) -> csr_matrix:
+        M = self._parts[0].M.tocsr().copy()
         for p in self._parts[1:]:
-            M += p.M.tocsc()
+            M += p.M.tocsr()
         for m, dof in self._masses:
             M[dof, dof] += m
         return M
 
-    def _get_damping_matrix(self):
-        C = self._parts[0].C.tocsc().copy()
+    def _get_damping_matrix(self) -> csr_matrix:
+        C = self._parts[0].C.tocsr().copy()
         for p in self._parts[1:]:
-            C += p.C.tocsc()
+            C += p.C.tocsr()
         return C
 
     @property
-    def K(self):
+    def K(self) -> csr_matrix:
         self._initialize()
         return self._stiffness_matrix
 
     @property
-    def M(self):
+    def M(self) -> csr_matrix:
         self._initialize()
         return self._mass_matrix
 
     @property
-    def C(self):
+    def C(self) -> csr_matrix:
         self._initialize()
         return self._damping_matrix
 
-    def to_dataset(self, which='all'):
+    def to_dataset(self,
+                   which: Literal['all', 'mesh', 'spring', 'mass'] = 'all'
+                   ) -> Dataset:
         """Write assembly information to dataset.
-        
+
         Parameters
         ----------
         which: 'all' | 'mesh' | 'spring' | 'mass'
             Define which part of the assembly to export.
-        
+
         Returns
         -------
-        ds: DataSet
-            A DataSet object containing geometry information of the assembly.
+        ds: Dataset
+            A Dataset object containing geometry information of the assembly.
         """
-        which = which.lower()
-        points = [Point(i) for i in self._nodes]
-        ds = DataSet(points)
-        cells = []
-        if which == 'all':
-            self._to_dataset_helper_mesh(cells)
-            self._to_dataset_helper_spring(cells)
-            self._to_dataset_helper_mass(cells)
-        elif which == 'mesh':
-            self._to_dataset_helper_mesh(cells)
-        elif which == 'spring':
-            self._to_dataset_helper_spring(cells)
-        elif which == 'mass':
-            self._to_dataset_helper_mass(cells)
+        _which = which.lower()
+        points = self._points
+        cell_list: list[Cell] = []
+        if _which == 'all':
+            self._to_dataset_helper_mesh(cell_list)
+            self._to_dataset_helper_spring(cell_list)
+            self._to_dataset_helper_mass(cell_list)
+        elif _which == 'mesh':
+            self._to_dataset_helper_mesh(cell_list)
+        elif _which == 'spring':
+            self._to_dataset_helper_spring(cell_list)
+        elif _which == 'mass':
+            self._to_dataset_helper_mass(cell_list)
         else:
             raise AttributeError("'which' should be in 'all' | 'mesh' | 'sprin"
                                  "g' | 'mass'")
-        ds.cells.extend(cells)
-        return ds  
-    
-    def _to_dataset_helper_mesh(self, cells):
+        cells = Cells(cell_list)
+        ds = Dataset(points, cells)
+        return ds
+
+    def _to_dataset_helper_mesh(self, cell_list: list[Cell]):
         for part in self._parts:
-            cells.extend([Cell(i, part.ELEMENT_TYPE) for i in part._elements])
-    
-    def _to_dataset_helper_spring(self, cells):
+            cell_list.extend(part.cells)
+
+    def _to_dataset_helper_spring(self, cell_list: list[Cell]):
         for s in self._springs:
             if s[2] is None:
-                cells.append(Cell([s[1]//6], 1))
+                cell_list.append(Vertex(s[1]//6))
             else:
-                cells.append(Cell([s[1]//6, s[2]//6], 3))
+                cell_list.append(Line(s[1]//6, s[2]//6))
 
-    def _to_dataset_helper_mass(self, cells):
+    def _to_dataset_helper_mass(self, cell_list: list[Cell]):
         for m in self._masses:
-            cells.append(Cell([s[1]]//6, 1))
-
-
-
-
-
-
+            cell_list.append(Vertex(m[1]//6))
