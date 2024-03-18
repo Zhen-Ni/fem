@@ -15,7 +15,7 @@ try:
     # Available for sys.version > "3.11".
     from typing import Self
 except ImportError:
-    Self = TypeVar('Self')
+    from typing_extensions import Self
 
 
 __all__ = ('Point', 'Points',
