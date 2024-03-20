@@ -3,11 +3,12 @@
 from __future__ import annotations
 import abc
 from typing import TYPE_CHECKING, TypeVar, Generic
+from scipy.sparse import csr_matrix, coo_matrix
 
 from ..section import Section, BeamSection, ShellSection, SolidSection
 
 if TYPE_CHECKING:
-    from scipy.sparse import csr_matrix
+    import numpy.typing as npt
     from ..mesh import Points, Cells
     from ..common import Vector
 
@@ -16,7 +17,6 @@ __all__ = ('Beam2', 'MITC4', 'SolidX')
 
 
 SECTION = TypeVar('SECTION', bound=Section)
-
 
 
 class ElementASM(abc.ABC, Generic[SECTION]):
@@ -98,7 +98,9 @@ class SolidX(ElementASM[SolidSection]):
                         section: SolidSection,
                         ) -> csr_matrix:
         from .solidx import get_mass_matrix_hexahedron
-        return get_mass_matrix_hexahedron(points, cells, section)
+        mat = get_mass_matrix_hexahedron(points, cells, section)
+        mat = expand_dof(mat)
+        return mat.tocsr()
 
     @staticmethod
     def get_stiffness_matrix(points: Points,
@@ -106,4 +108,22 @@ class SolidX(ElementASM[SolidSection]):
                              section: SolidSection
                              ) -> csr_matrix:
         from .solidx import get_stiffness_matrix_hexahedron
-        return get_stiffness_matrix_hexahedron(points, cells, section)
+        mat = get_stiffness_matrix_hexahedron(points, cells, section)
+        mat = expand_dof(mat)
+        return mat.tocsr()
+
+
+def expand_dof(mat: coo_matrix) -> coo_matrix:
+    """Add rotational dofs into assembled matrix."""
+    shape = mat.shape
+    row = _expand_dof_helper(mat.row)
+    col = _expand_dof_helper(mat.col)
+    value = mat.data
+    res = coo_matrix((value, (row, col)), [shape[0] * 2, shape[1] * 2])
+    return res
+
+
+def _expand_dof_helper(arr: npt.NDArray) -> npt.NDArray:
+    node_id = arr // 3
+    node_dof = arr % 3
+    return node_id * 6 + node_dof

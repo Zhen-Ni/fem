@@ -1,2 +1,4 @@
 .gitignore
 old
+__pycache__
+abaqus

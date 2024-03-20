@@ -80,6 +80,7 @@ class TestCells(unittest.TestCase):
         self.assertEqual(repr(cells2), "Cells object with 2 cells")
 
         self.assertEqual(list(cells), [cells[0], cells[1], cells[2]])
+        self.assertEqual(list(cells2.split())[0].same_cell_type(), fem.Line)
 
     def test_cells_mixed(self):
         l0 = fem.Vertex(0)
@@ -94,6 +95,12 @@ class TestCells(unittest.TestCase):
         self.assertEqual(l[1], l1)
         self.assertEqual(l[2], l2)
         self.assertEqual(l[3], l3)
+        self.assertFalse(cells.same_cell_type())
+        size = 0
+        for c in cells.split():
+            size += len(c)
+            self.assertTrue(c.same_cell_type())
+        self.assertEqual(size, len(cells))
 
     def test_cells_conversion(self):
         arr = np.array([0, 1, 1, 2, 2, 3]).reshape(3, 2)

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional, Type, Generic, TypeVar, \
     SupportsFloat
 
 
-from .common import Vector, XYZType
+from .geometry import Vector, XYZType
 from .elements import Beam2, MITC4, SolidX
 from .dataset import Points, Cells, Dataset
 from .section import Section, BeamSection, ShellSection, SolidSection

@@ -32,6 +32,10 @@ class MeshMap(abc.ABC):
             t_list.append(elem)
         doflocs = points.to_array().T
         t = np.array(t_list).T
+        # Use C_CONTIGUOUS array is more performant in dimension-based
+        # slices, as indicated by skfem.mesh.
+        doflocs = np.ascontiguousarray(doflocs)
+        t = np.ascontiguousarray(t)
         mesh = skfem.Mesh3D(doflocs, t)
         mesh.elem = cls.elem
         return mesh
@@ -40,7 +44,6 @@ class MeshMap(abc.ABC):
 class HexahedronMap(MeshMap):
     index_map = (3, 0, 7, 2, 4, 1, 6, 5)
     elem = skfem.MeshHex1.elem
-
 
 
 @skfem.BilinearForm

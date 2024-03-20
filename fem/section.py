@@ -108,7 +108,7 @@ class BeamSection(Section):
     """Class of shell section.
 
     The beam is modelled along the x-axis.
-    
+
     Parameters
     ----------
     material: Material object
@@ -184,7 +184,7 @@ class BeamSection(Section):
         return self._torsion_coefficient
 
     @staticmethod
-    def circular(material, r, name=None):
+    def circular(material: Material, r: float, name: Optional[str] = None):
         """Create a instance of SectionBeam for circular.
 
         Parameters
@@ -205,7 +205,10 @@ class BeamSection(Section):
         return BeamSection(material, A, Ix, Iy, Iz, name=name, kappa=kappa)
 
     @staticmethod
-    def pipe(material, R, r, name=None):
+    def pipe(material: Material,
+             R: float,
+             r: float,
+             name: Optional[str] = None):
         """Create a instance of SectionBeam for pipe.
 
         Parameters
@@ -230,17 +233,20 @@ class BeamSection(Section):
         return BeamSection(material, A, Ix, Iy, Iz, name=name, kappa=kappa)
 
     @staticmethod
-    def rectangular(material, a, b, name=None):
+    def rectangular(material: Material,
+                    width: float,
+                    height: float,
+                    name: Optional[str] = None):
         """Create a instance of SectionBeam for rectangular.
 
         Parameters
         ----------
         material : Material object
             Material used for this section.
-        a : float
-            Length of the rectangular.
-        b : float
+        width : float
             Width of the rectangular.
+        height : float
+            Height of the rectangular.
         name : string, optional
             Name of this section.
 
@@ -249,6 +255,7 @@ class BeamSection(Section):
         An approximation is used for Ix (or J) in this function. Maybe a better
         solution can be obtained by the Prandtl stress function approach.
         """
+        a, b = width, height
         A = a * b
         Iy = a * b ** 3 / 12
         Iz = a ** 3 * b / 12

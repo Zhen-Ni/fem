@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 import abc
-from typing import overload, Type, Generic, TypeVar, Optional, \
+from typing import overload, Type, Generic, TypeVar, Optional, Iterator, \
     SupportsIndex, SupportsFloat, SupportsInt
 from collections.abc import Sequence
 import numpy as np
 import numpy.typing as npt
 
-from .common import CellType, SequenceView, Readonly, InhertSlotsABCMeta, \
-    XYZBase
+from .common import CellType, SequenceView, Readonly, InhertSlotsABCMeta
+from .geometry import Point
 
 try:
     # Available for sys.version > "3.11".
@@ -88,14 +88,6 @@ class DatasetBase(Sequence,
 
     def to_list(self) -> list[T]:
         return list(self)
-
-
-class Point(XYZBase):
-    def __repr__(self):
-        return f"Point: ({self.x}, {self.y}, {self.z})"
-
-    def coordinates(self) -> tuple[float, float, float]:
-        return self.x, self.y, self.z
 
 
 class Points(DatasetBase[Point]):
@@ -296,6 +288,13 @@ class Cells(DatasetBase[Cell]):
         if res.dtype == object:
             raise TypeError('all cells should have same number of nodes')
         return res
+
+    def split(self) -> Iterator[Cells]:
+        cells_dict: dict[Type[Cell], list[Cell]] = {}
+        for cell in self:
+            cells_dict.setdefault(cell.id, []).append(cell)
+        for cell_list in cells_dict.values():
+            yield(self.__class__(cell_list))
 
 
 class Field(DatasetBase[T]):

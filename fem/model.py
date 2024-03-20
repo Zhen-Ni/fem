@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, Optional, SupportsIndex
 
 import numpy as np
 
-from .common import Vector, empty, SequenceView, XYZType
+from .common import empty, SequenceView
+from .geometry import Vector, XYZType
 from .dataset import Points, Dataset, VectorField
 
 if TYPE_CHECKING:

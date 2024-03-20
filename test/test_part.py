@@ -53,8 +53,8 @@ class TestPart(unittest.TestCase):
         part = fem.SolidPart(nodes, elements, section)
         M = part.M
         K = part.K
-        self.assertEqual(M.shape, (24, 24))
-        self.assertEqual(K.shape, (24, 24))
+        self.assertEqual(M.shape, (48, 48))
+        self.assertEqual(K.shape, (48, 48))
         self.assertNotEqual(M.nnz, 0)
         self.assertNotEqual(K.nnz, 0)
 

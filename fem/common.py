@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 import abc
-from enum import Enum
-from dataclasses import dataclass
-from typing import Generic, Type, TypeVar, overload, SupportsIndex, \
-    SupportsFloat, Union
-from collections.abc import Sequence, Iterator
+from enum import Enum, IntEnum
+from collections.abc import Sequence
+from typing import Generic, Type, TypeVar, overload, SupportsIndex
 
 try:
     # Available for sys.version > "3.11".
@@ -15,7 +13,24 @@ except ImportError:
     Self = TypeVar('Self')
 
 
-__all__ = 'Vector', 'CellType', 'empty', 'XYZType'
+__all__ = 'empty', 'CellType', 'DOF'
+
+
+class CellType(Enum):
+    VERTEX = 1
+    LINE = 3
+    QUAD = 9
+    TETRA = 10
+    HEXAHEDRON = 12
+
+
+class DOF(IntEnum):
+    X = 0
+    Y = 1
+    Z = 2
+    RX = 3
+    RY = 4
+    RZ = 5
 
 
 @overload
@@ -31,14 +46,6 @@ def empty(*dimensions):
     if dimensions:
         return [empty(*dimensions[1:]) for i in range(dimensions[0])]
     return None
-
-
-class CellType(Enum):
-    VERTEX = 1
-    LINE = 3
-    QUAD = 9
-    TETRA = 10
-    HEXAHEDRON = 12
 
 
 class Readonly:
@@ -157,54 +164,3 @@ class SequenceView(Sequence,
             if p1 != p2:
                 return False
         return True
-
-
-XYZType = Union[tuple[()],
-                tuple[SupportsFloat],
-                tuple[SupportsFloat, SupportsFloat],
-                tuple[SupportsFloat, SupportsFloat, SupportsFloat]
-                ]
-
-
-@dataclass(frozen=True, slots=True)
-class _XYZBase:
-    x: float = 0.
-    y: float = 0.
-    z: float = 0.
-
-
-class XYZBase(_XYZBase, Readonly, metaclass=InhertSlotsABCMeta):
-    """Base class for points and vectors in 3D space."""
-    def __init__(self,
-                 x: SupportsFloat = 0.,
-                 y: SupportsFloat = 0.,
-                 z: SupportsFloat = 0.):
-        super().__init__(float(x), float(y), float(z))
-
-
-class Vector(XYZBase):
-    def normalize(self) -> Vector:
-        return self / self.norm()
-
-    def norm(self) -> float:
-        return sum(i * i for i in self) ** .5
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}: ({self.x}, {self.y}, {self.z})"
-
-    def __iter__(self) -> Iterator[float]:
-        yield self.x
-        yield self.y
-        yield self.z
-
-    def __mul__(self, c: float) -> Vector:
-        return Vector(*(i * c for i in self))
-
-    def __rmul__(self, c: float) -> Vector:
-        return self * c
-
-    def __truediv__(self, d: float) -> Vector:
-        return self * (1. / d)
-
-    def __neg__(self) -> Vector:
-        return Vector(*(-i for i in self))

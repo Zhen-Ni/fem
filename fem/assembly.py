@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Collection, Optional, Literal, \
     SupportsIndex
 
-from .common import SequenceView
+from .common import SequenceView, DOF
 from .dataset import Points, Vertex, Line, Cell, Cells, Dataset
 
 
@@ -61,9 +61,9 @@ class Assembly:
     def add_spring(self,
                    k: float,
                    node1: int,
-                   dof1: int,
+                   dof1: DOF,
                    node2: Optional[int] = None,
-                   dof2: Optional[int] = None) -> Assembly:
+                   dof2: Optional[DOF] = None) -> Assembly:
         """Add a spring to the assembly.
 
         Users may define a spring connecting two nodes or connecting a node to
@@ -75,22 +75,24 @@ class Assembly:
             Stiffness of the spring.
         node1 : int
             Index of the first node.
-        dof1 : int
-            The degree of freedom of the first node.
+        dof1 : DOF
+            The degree of freedom of the first node. Note that DOF is an
+            IntEnum from 0 to 5.
         node2 : int, optional
             Index of the second node. If node2 is None, the spring is connected
             to the ground. (default to None)
-        dof2 : int, optional
+        dof2 : DOF, optional
             The degree of freedom of the second node. If dof2 is None, dof2 is
-            the same as dof1. (default to None)
+            the same as dof1. Note that DOF is an IntEnum from 0 to 5. (default
+            to None)
         """
         self._uninitialize()
         if node2 is None:
-            self._springs.append((k, node1*6+dof1, None))
+            self._springs.append((k, node1 * 6 + dof1, None))
         else:
             if dof2 is None:
                 dof2 = dof1
-            self._springs.append((k, node1*6+dof1, node2*6+dof2))
+            self._springs.append((k, node1 * 6 + dof1, node2 * 6 + dof2))
         return self
 
     @property
@@ -113,7 +115,7 @@ class Assembly:
             self._springs.pop(idx)
         return self
 
-    def add_mass(self, m: float, node: int, dof: int) -> Assembly:
+    def add_mass(self, m: float, node: int, dof: DOF) -> Assembly:
         """Add a mass point to the assembly.
 
         Parameters
@@ -122,8 +124,9 @@ class Assembly:
             The mass.
         node : int
             The index of the node.
-        dof : int
-            The degree of freedom of the node.
+        dof : DOF
+            The degree of freedom of the node.  Note that DOF is an
+            IntEnum from 0 to 5.
         """
         self._uninitialize()
         self._masses.append((m, node*6+dof))
@@ -169,6 +172,11 @@ class Assembly:
         K = self._parts[0].K.tocsr().copy()
         for p in self._parts[1:]:
             K += p.K.tocsr()
+        # Change the type of K to lil matrix to avoid the following
+        # warning: `SparseEfficiencyWarning: Changing the sparsity
+        # structure of a csr_matrix is expensive. lil_matrix is more
+        # efficient.`
+        K = K.tolil()
         for k, dof1, dof2 in self._springs:
             if dof2 is None:
                 K[dof1, dof1] += k
@@ -177,7 +185,7 @@ class Assembly:
                 K[dof1, dof2] += -k
                 K[dof2, dof1] += -k
                 K[dof2, dof2] += k
-        return K
+        return K.tocsr()
 
     def _get_mass_matrix(self) -> csr_matrix:
         M = self._parts[0].M.tocsr().copy()
