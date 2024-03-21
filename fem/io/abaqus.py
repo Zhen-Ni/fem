@@ -4,7 +4,7 @@ import re
 from typing import TextIO, Literal, Type
 
 from ..dataset import (Points, Cells, Point, Cell, Line, Quad, Hexahedron,
-                       Dataset)
+                       Mesh)
 
 
 __all__ = 'read_inp',
@@ -13,7 +13,8 @@ __all__ = 'read_inp',
 class AbaqusInputFileError(Exception):
     pass
 
-class AbaqusInp(Dataset):
+
+class AbaqusInp:
     """Interpreter of abaqus input file.
 
     This class can only process inp files with only one part at present. Users
@@ -133,14 +134,15 @@ class AbaqusInp(Dataset):
         self._elements.append(self._element_type(*(int(i) - 1 for i in words[1:])))
 
 
-    def to_dataset(self, title: str = 'AbaqusInp'):
+    @property
+    def mesh(self) -> Mesh:
         points = Points(self._nodes)
         cells = Cells(self._elements)
-        return Dataset(points, cells, title)
+        return Mesh(points, cells)
 
 
-def read_inp(filename: str) -> Dataset:
+def read_inp(filename: str) -> Mesh:
     with open(filename) as f:
-        ds = AbaqusInp(f).to_dataset()
+        ds = AbaqusInp(f).mesh
     return ds
         

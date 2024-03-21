@@ -12,7 +12,7 @@ class TestModel(unittest.TestCase):
         height = 0.02
         section = fem.BeamSection.rectangular(fem.STEEL, width, height)
         ds = fem.io.read_inp('test/beam-1d.inp')
-        part = fem.BeamPart(ds.points, ds.cells, section)
+        part = fem.BeamPart(ds, section)
         asm = fem.Assembly([part])
 
         # Encastre boundary at x = 0.

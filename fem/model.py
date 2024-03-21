@@ -8,7 +8,7 @@ import numpy as np
 
 from .common import empty, SequenceView
 from .geometry import Vector, XYZType
-from .dataset import Points, Dataset, VectorField
+from .dataset import Points, Dataset, FloatArrayField, Mesh
 
 if TYPE_CHECKING:
     import numpy.typing as npt
@@ -165,9 +165,13 @@ class Model:
         assert self._force_vector is not None
         return self._force_vector
 
+    def to_mesh(self) -> Mesh:
+        return self.assembly.to_mesh()
+
     @property
     def to_dataset(self) -> Dataset:
-        dataset = self.assembly.to_dataset()
+        mesh = self.assembly.to_mesh()
+        dataset = Dataset(mesh)
 
         force = empty(len(self.points), 3)
         moment = empty(len(self.points), 3)
@@ -178,8 +182,8 @@ class Model:
                 force[index][direction] += f
             else:
                 moment[index][direction - 3] += f
-        force_field = VectorField(force)
-        moment_field = VectorField(moment)
+        force_field = FloatArrayField(force)
+        moment_field = FloatArrayField(moment)
         dataset.point_data['force'] = force_field
         dataset.point_data['moment'] = moment_field
         gravity = [0., 0., 0.]
@@ -187,6 +191,6 @@ class Model:
             gravity[0] += g * v.x
             gravity[1] += g * v.y
             gravity[2] += g * v.z
-        gravity_field = VectorField([gravity] * len(dataset.cells))
+        gravity_field = FloatArrayField([gravity] * len(dataset.cells))
         dataset.cell_data['gravity'] = gravity_field
         return dataset

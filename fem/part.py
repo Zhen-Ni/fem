@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Optional, Type, Generic, TypeVar, \
 
 from .geometry import Vector, XYZType
 from .elements import Beam2, MITC4, SolidX
-from .dataset import Points, Cells, Dataset
+from .dataset import Dataset, Mesh
 from .section import Section, BeamSection, ShellSection, SolidSection
 
 if TYPE_CHECKING:
@@ -57,9 +57,8 @@ class Part(abc.ABC, Generic[SECTION]):
     @abc.abstractproperty
     def element_asm(self) -> Type[ElementASM]: ...
 
-    def __init__(self, points: Points, cells: Cells, section: SECTION):
-        self._points = points
-        self._cells = cells
+    def __init__(self, mesh: Mesh, section: SECTION):
+        self._mesh = mesh
         self._section = section
 
         self._stiffness_matrix: csr_matrix | None = None
@@ -70,12 +69,8 @@ class Part(abc.ABC, Generic[SECTION]):
         self._is_initialized = False
 
     @property
-    def points(self) -> Points:
-        return self._points
-
-    @property
-    def cells(self) -> Cells:
-        return self._cells
+    def mesh(self) -> Mesh:
+        return self._mesh
 
     @property
     def section(self) -> SECTION:
@@ -98,13 +93,11 @@ class Part(abc.ABC, Generic[SECTION]):
         self._is_initialized = True
 
     def _get_stiffness_matrix(self):
-        return self.element_asm.get_stiffness_matrix(self.points,
-                                                     self.cells,
+        return self.element_asm.get_stiffness_matrix(self.mesh,
                                                      self.section)
 
     def _get_mass_matrix(self):
-        return self.element_asm.get_mass_matrix(self.points,
-                                                self.cells,
+        return self.element_asm.get_mass_matrix(self.mesh,
                                                 self.section)
 
     def _get_damping_matrix(self) -> csr_matrix:
@@ -155,7 +148,7 @@ class Part(abc.ABC, Generic[SECTION]):
         time : float, optional
             Additional information for time step.
         """
-        ds = Dataset(self.points, self.cells, title, time)
+        ds = Dataset(self.mesh, title, time)
         return ds
 
 
@@ -178,11 +171,10 @@ class BeamPart(Part[BeamSection]):
     element_asm = Beam2
 
     def __init__(self,
-                 nodes: Points,
-                 elements: Cells,
+                 mesh: Mesh,
                  section: BeamSection,
                  n1: Vector | XYZType | None = None):
-        super().__init__(nodes, elements, section)
+        super().__init__(mesh, section)
         self._n1: Vector
         self.set_direction(n1)
 
@@ -191,20 +183,22 @@ class BeamPart(Part[BeamSection]):
         """Set the n1 direction of the cross section for the beam."""
         if n1 is None:
             _n1 = Vector(0., 1., 0.)
-        if isinstance(n1, tuple):
+        elif isinstance(n1, tuple):
             _n1 = Vector(*(float(i) for i in n1))
+        elif isinstance(n1, Vector):
+            _n1 = n1
+        else:
+            raise TypeError('cannot convert n1 to Vector')
         self._n1 = _n1
 
     def _get_stiffness_matrix(self) -> csr_matrix:
-        return self.element_asm.get_stiffness_matrix(self._points,
-                                                     self._cells,
-                                                     self._section,
+        return self.element_asm.get_stiffness_matrix(self.mesh,
+                                                     self.section,
                                                      self._n1)
 
     def _get_mass_matrix(self) -> csr_matrix:
-        return self.element_asm.get_mass_matrix(self._points,
-                                                self._cells,
-                                                self._section,
+        return self.element_asm.get_mass_matrix(self.mesh,
+                                                self.section,
                                                 self._n1)
 
 

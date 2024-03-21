@@ -135,7 +135,7 @@ class SequenceView(Sequence,
         if isinstance(index, SupportsIndex):
             _index = index.__index__()
             if -len(self.__sequence) <= _index < len(self.__sequence):
-                return self.__sequence[self.__indexes[index]]
+                return self.__sequence[self.__indexes[_index]]
             raise IndexError('index out of range')
         elif isinstance(index, (slice, Sequence)):
             # Check `index out of range` in __init__.

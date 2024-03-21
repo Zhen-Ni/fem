@@ -13,7 +13,7 @@ class TestPart(unittest.TestCase):
             1), fem.Point(2), fem.Point(3), fem.Point(4)])
         elements = fem.Cells.from_array(fem.Line, np.array(
             [0, 1, 1, 2, 2, 3]).reshape(3, 2))
-        part = fem.BeamPart(nodes, elements, section)
+        part = fem.BeamPart(fem.Mesh(nodes, elements), section)
         M = part.M
         K = part.K
         self.assertEqual(M.shape, (30, 30))
@@ -28,7 +28,7 @@ class TestPart(unittest.TestCase):
             1, 0, 0), fem.Point(1, 1, 0), fem.Point(0, 0, 1)])
         elements = fem.Cells.from_array(fem.Quad, np.array(
             [[0, 1, 2, 2]]))
-        part = fem.ShellPart(nodes, elements, section)
+        part = fem.ShellPart(fem.Mesh(nodes, elements), section)
         M = part.M
         K = part.K
         self.assertEqual(M.shape, (24, 24))
@@ -50,7 +50,7 @@ class TestPart(unittest.TestCase):
                                       )
         elements = fem.Cells.from_array(fem.Hexahedron, np.array(
             [[0, 1, 2, 3, 4, 5, 6, 7]]))
-        part = fem.SolidPart(nodes, elements, section)
+        part = fem.SolidPart(fem.Mesh(nodes, elements), section)
         M = part.M
         K = part.K
         self.assertEqual(M.shape, (48, 48))

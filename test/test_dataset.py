@@ -66,7 +66,7 @@ class TestCells(unittest.TestCase):
         self.assertEqual(cells[1].nodes, (1, 2))
         self.assertEqual(cells[2].nodes, (2, 3))
         self.assertTrue(cells.same_cell_type() is fem.Line)
-        
+
         cells2 = cells[:2]
         self.assertEqual(len(cells2), 2)
         self.assertEqual(cells2[0], l0)
@@ -117,22 +117,43 @@ class TestCells(unittest.TestCase):
 
         self.assertTrue(np.allclose(cells.to_array(), arr))
 
+    def test_cells_add(self):
+        l0 = fem.Line(0, 1)
+        l1 = fem.Line(1, 2)
+        l2 = fem.Line(2, 3)
+        cells = fem.Cells([l0, l1, l2])
+        cells1 = fem.Cells([l0, l1])
+        cells2 = fem.Cells([l2])
+        self.assertEqual(cells1 + cells2, cells)
+
 
 class TestField(unittest.TestCase):
 
     def test_field(self):
         data = [1, 2, 3, 4, 5]
-        field = fem.ScalarField(np.array(data))
+        field = fem.FloatScalarField(np.array(data))
         self.assertEqual(list(field), data)
-        self.assertEqual(repr(field), 'ScalarField object with 5 data')
+        self.assertEqual(repr(field), 'FloatScalarField object with 5 data')
         self.assertEqual(len(field), 5)
 
+        data = [1, 2, 3, 4, 5]
+        field = fem.ComplexScalarField(np.array(data))
+        self.assertEqual(list(field), data)
+        self.assertEqual(repr(field), 'ComplexScalarField object with 5 data')
+        self.assertEqual(len(field), 5)
+        self.assertTrue(isinstance(field[0], complex))
+        
         data = [1, 2, 3, 4, 5, 6]
-        field = fem.VectorField(np.array(data).reshape(2, 3))
+        field = fem.FloatArrayField(np.array(data).reshape(2, 3))
         self.assertEqual(list(field), [(1, 2, 3), (4, 5, 6)])
-        self.assertEqual(repr(field), 'VectorField object with 2 data')
+        self.assertEqual(repr(field), 'FloatArrayField object with 2 data')
         self.assertEqual(len(field), 2)
         self.assertEqual(field.dimension, 3)
-        
+        self.assertEqual(field.dof(fem.DOF.X), fem.FloatScalarField([1, 4]))
+        self.assertEqual(field.dof([fem.DOF.X, fem.DOF.Y]),
+                         fem.FloatArrayField([[1, 2], [4, 5]], dimension=2))
+        self.assertAlmostEqual(field.norm()[1] ** 2, 4 ** 2 + 5 ** 2+6 ** 2)
+
+
 if __name__ == '__main__':
     unittest.main(argv=[''], exit=False)

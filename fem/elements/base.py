@@ -9,8 +9,8 @@ from ..section import Section, BeamSection, ShellSection, SolidSection
 
 if TYPE_CHECKING:
     import numpy.typing as npt
-    from ..mesh import Points, Cells
-    from ..common import Vector
+    from ..dataset import Mesh
+    from ..geometry import Vector
 
 
 __all__ = ('Beam2', 'MITC4', 'SolidX')
@@ -23,14 +23,12 @@ class ElementASM(abc.ABC, Generic[SECTION]):
     """Abstract base class for assemble element matrixes."""
 
     @abc.abstractstaticmethod
-    def get_mass_matrix(points: Points,
-                        cells: Cells,
+    def get_mass_matrix(mesh: Mesh,
                         section: SECTION,
                         **kwargs) -> csr_matrix: ...
 
     @abc.abstractstaticmethod
-    def get_stiffness_matrix(points: Points,
-                             cells: Cells,
+    def get_stiffness_matrix(mesh: Mesh,
                              section: SECTION,
                              **kwargs) -> csr_matrix: ...
 
@@ -38,24 +36,22 @@ class ElementASM(abc.ABC, Generic[SECTION]):
 class Beam2(ElementASM[BeamSection]):
 
     @staticmethod
-    def get_mass_matrix(points: Points,
-                        cells: Cells,
+    def get_mass_matrix(mesh: Mesh,
                         section: BeamSection,
                         n1: Vector) -> csr_matrix:
         from .beam import get_mass_matrix_beam
-        nodes = points.to_array()
-        elements = cells.to_array()
+        nodes = mesh.points.to_array()
+        elements = mesh.cells.to_array()
         return get_mass_matrix_beam(nodes, elements, section,
                                     [n1.x, n1.y, n1.z]).tocsr()
 
     @staticmethod
-    def get_stiffness_matrix(points: Points,
-                             cells: Cells,
+    def get_stiffness_matrix(mesh: Mesh,
                              section: BeamSection,
                              n1: Vector) -> csr_matrix:
         from .beam import get_stiffness_matrix_beam
-        nodes = points.to_array()
-        elements = cells.to_array()
+        nodes = mesh.points.to_array()
+        elements = mesh.cells.to_array()
         return get_stiffness_matrix_beam(nodes, elements, section,
                                          [n1.x, n1.y, n1.z]).tocsr()
 
@@ -63,26 +59,24 @@ class Beam2(ElementASM[BeamSection]):
 class MITC4(ElementASM[ShellSection]):
 
     @staticmethod
-    def get_mass_matrix(points: Points,
-                        cells: Cells,
+    def get_mass_matrix(mesh: Mesh,
                         section: ShellSection,
                         ) -> csr_matrix:
         from .mitc import get_mass_matrix
-        nodes = points.to_array()
-        elements = cells.to_array()
+        nodes = mesh.points.to_array()
+        elements = mesh.cells.to_array()
         return get_mass_matrix(section.material.rho,
                                section.h,
                                elements,
                                nodes).tocsr()
 
     @staticmethod
-    def get_stiffness_matrix(points: Points,
-                             cells: Cells,
+    def get_stiffness_matrix(mesh: Mesh,
                              section: ShellSection
                              ) -> csr_matrix:
         from .mitc import get_stiffness_matrix
-        nodes = points.to_array()
-        elements = cells.to_array()
+        nodes = mesh.points.to_array()
+        elements = mesh.cells.to_array()
         return get_stiffness_matrix(section.material.E,
                                     section.material.rho,
                                     section.h,
@@ -93,22 +87,20 @@ class MITC4(ElementASM[ShellSection]):
 class SolidX(ElementASM[SolidSection]):
 
     @staticmethod
-    def get_mass_matrix(points: Points,
-                        cells: Cells,
+    def get_mass_matrix(mesh: Mesh,
                         section: SolidSection,
                         ) -> csr_matrix:
         from .solidx import get_mass_matrix_hexahedron
-        mat = get_mass_matrix_hexahedron(points, cells, section)
+        mat = get_mass_matrix_hexahedron(mesh, section)
         mat = expand_dof(mat)
         return mat.tocsr()
 
     @staticmethod
-    def get_stiffness_matrix(points: Points,
-                             cells: Cells,
+    def get_stiffness_matrix(mesh: Mesh,
                              section: SolidSection
                              ) -> csr_matrix:
         from .solidx import get_stiffness_matrix_hexahedron
-        mat = get_stiffness_matrix_hexahedron(points, cells, section)
+        mat = get_stiffness_matrix_hexahedron(mesh, section)
         mat = expand_dof(mat)
         return mat.tocsr()
 

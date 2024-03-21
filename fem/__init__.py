@@ -8,6 +8,7 @@ from .section import *
 from .part import *
 from .assembly import *
 from .model import *
+from .solver import *
 
 from . import io
 

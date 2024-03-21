@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Type
 
 if TYPE_CHECKING:
     from scipy.sparse import coo_matrix
-    from ..dataset import Points, Cells
+    from ..dataset import Points, Cells, Mesh
     from ..section import SolidSection
 
 
@@ -23,14 +23,14 @@ class MeshMap(abc.ABC):
     def elem(self) -> Type[skfem.Element]: ...
 
     @classmethod
-    def to_skfem(cls, points: Points, cells: Cells) -> skfem.Mesh:
+    def to_skfem(cls, mesh: Mesh) -> skfem.Mesh:
         t_list = []
-        for cell in cells:
+        for cell in mesh.cells:
             elem = []
             for j in cls.index_map:
                 elem.append(cell.nodes[j])
             t_list.append(elem)
-        doflocs = points.to_array().T
+        doflocs = mesh.points.to_array().T
         t = np.array(t_list).T
         # Use C_CONTIGUOUS array is more performant in dimension-based
         # slices, as indicated by skfem.mesh.
@@ -51,11 +51,10 @@ def mass_form(u, v, w):
     return dot(w.rho * u, v)
 
 
-def get_mass_matrix_hexahedron(points: Points,
-                               cells: Cells,
+def get_mass_matrix_hexahedron(mesh: Mesh,
                                section: SolidSection
                                ) -> coo_matrix:
-    mesh = HexahedronMap.to_skfem(points, cells)
+    mesh = HexahedronMap.to_skfem(mesh)
     e1 = skfem.ElementHex1()
     e = skfem.ElementVector(e1)
     basis = skfem.Basis(mesh, e)
@@ -64,11 +63,10 @@ def get_mass_matrix_hexahedron(points: Points,
     return M.tocoo()
 
 
-def get_stiffness_matrix_hexahedron(points: Points,
-                                    cells: Cells,
+def get_stiffness_matrix_hexahedron(mesh: Mesh,
                                     section: SolidSection
                                     ) -> coo_matrix:
-    mesh = HexahedronMap.to_skfem(points, cells)
+    mesh = HexahedronMap.to_skfem(mesh)
     e1 = skfem.ElementHex1()
     e = skfem.ElementVector(e1)
     basis = skfem.Basis(mesh, e)

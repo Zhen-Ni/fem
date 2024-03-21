@@ -10,7 +10,7 @@ class TestAssembly(unittest.TestCase):
         height = 0.02
         section = fem.BeamSection.rectangular(fem.STEEL, width, height)
         ds = fem.io.read_inp('test/beam-1d.inp')
-        part = fem.BeamPart(ds.points, ds.cells, section)
+        part = fem.BeamPart(ds, section)
         asm = fem.Assembly([part])
 
         # Encastre boundary at x = 0.
@@ -33,7 +33,7 @@ class TestAssembly(unittest.TestCase):
         thickness = 0.02
         section = fem.ShellSection(fem.STEEL, thickness)
         ds = fem.io.read_inp('test/beam-2d.inp')
-        part = fem.ShellPart(ds.points, ds.cells, section)
+        part = fem.ShellPart(ds, section)
         asm = fem.Assembly([part])
 
         # Encastre boundary at x = 0.
@@ -55,7 +55,7 @@ class TestAssembly(unittest.TestCase):
     # def test_beam3d(self):
     #     section = fem.SolidSection(fem.STEEL)
     #     ds = fem.io.read_inp('test/beam-3d.inp')
-    #     part = fem.SolidPart(ds.points, ds.cells, section)
+    #     part = fem.SolidPart(ds, section)
     #     asm = fem.Assembly([part])
 
     #     # Encastre boundary at x = 0.

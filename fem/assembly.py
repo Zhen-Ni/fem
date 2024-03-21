@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Collection, Optional, Literal, \
     SupportsIndex
 
 from .common import SequenceView, DOF
-from .dataset import Points, Vertex, Line, Cell, Cells, Dataset
+from .dataset import Points, Vertex, Line, Cell, Cells, Mesh
 
 
 if TYPE_CHECKING:
@@ -28,14 +28,14 @@ class Assembly:
     def __init__(self, parts: Collection[Part]):
         if len(parts) == 0:
             raise ValueError('assembly should contain at least one part')
-        parts_ = list(parts)
-        points = parts_[0].points
-        for p in parts_[1:]:
+        _parts = list(parts)
+        points = _parts[0].mesh.points
+        for p in _parts[1:]:
             if not points == p.points:
                 raise ValueError(
                     'points array should be the same in each part')
         self._points = points
-        self._parts = parts_
+        self._parts = _parts
         self._stiffness_matrix: csr_matrix | None = None
         self._mass_matrix: csr_matrix | None = None
         self._damping_matrix: csr_matrix | None = None
@@ -216,9 +216,9 @@ class Assembly:
         self._initialize()
         return self._damping_matrix
 
-    def to_dataset(self,
-                   which: Literal['all', 'mesh', 'spring', 'mass'] = 'all'
-                   ) -> Dataset:
+    def to_mesh(self,
+                which: Literal['all', 'mesh', 'spring', 'mass'] = 'all'
+                ) -> Mesh:
         """Write assembly information to dataset.
 
         Parameters
@@ -248,12 +248,12 @@ class Assembly:
             raise AttributeError("'which' should be in 'all' | 'mesh' | 'sprin"
                                  "g' | 'mass'")
         cells = Cells(cell_list)
-        ds = Dataset(points, cells)
-        return ds
+        mesh = Mesh(points, cells)
+        return mesh
 
     def _to_dataset_helper_mesh(self, cell_list: list[Cell]):
         for part in self._parts:
-            cell_list.extend(part.cells)
+            cell_list.extend(part.mesh.cells)
 
     def _to_dataset_helper_spring(self, cell_list: list[Cell]):
         for s in self._springs:

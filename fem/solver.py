@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import abc
 from typing import TYPE_CHECKING, final, Sequence, SupportsIndex, overload,\
-    Iterator
+    Iterator, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -12,7 +12,8 @@ from scipy.sparse.linalg import eigsh
 
 from .common import SequenceView, Readonly, InhertSlotsABCMeta
 from .geometry import Vector
-from .dataset import Points, Mesh, Dataset, ScalarField, VectorField
+from .dataset import Points, Mesh, Dataset, Field, ScalarField, ArrayField,\
+    FloatArrayField, ComplexArrayField
 
 
 if TYPE_CHECKING:
@@ -28,8 +29,8 @@ class Frame(Readonly, metaclass=InhertSlotsABCMeta):
     as fundamental input. The nodal solution includes both
     translational and rotaional displacement, thus has 6-th the size
     of the number of nodes defined in the mesh. Nodal solution will be
-    converted into a VectorField while initializing. Label and label
-    values are used to define the type and the status of the
+    converted into an `ArrayField` object while initializing. Label
+    and label values are used to define the type and the status of the
     frame. For example, in modal analysis, label can be set to
     'frequency' and its values is the corresponding frequency.
 
@@ -37,11 +38,7 @@ class Frame(Readonly, metaclass=InhertSlotsABCMeta):
     be given by `scalars` and `fields`. Note that unlike
     nodal_solution, which is converted into `Field` object
     automatically, when defining other field variables, users should
-    convert it into ScalarField or VectorField objects first.
-
-    Note that frames with complex data is currently not supported. We'd
-    like to support complex results by updating the structure of `Field`
-    in the future.
+    convert it into `Field` objects first.
 
     Parameters
     ----------
@@ -58,8 +55,9 @@ class Frame(Readonly, metaclass=InhertSlotsABCMeta):
         The corresponding value for label. defaults to nan.
     scalars : dict[str, float], optional
         Other optional scalar values to be stored in the frame.
-    fields : dict[str, ScalarField | VectorField], optional
+    fields : dict[str, Field], optional
         Other optional scalar of vector fields to be stored in the frame.
+
     """
 
     __slots__ = ('_mesh', '_nodal_solution', '_label', '_label_value',
@@ -67,14 +65,14 @@ class Frame(Readonly, metaclass=InhertSlotsABCMeta):
 
     def __init__(self,
                  mesh: Mesh,
-                 nodal_solution: npt.NDArray[float],
+                 nodal_solution: npt.NDArray,
                  label: str = '',
                  label_value: float = float('nan'),
                  *,
                  scalars: dict[str, float] | None = None,
-                 fields: dict[str, ScalarField | VectorField] | None = None):
+                 fields: Optional[dict[str, Field]] = None):
         self._mesh = mesh
-        self._nodal_solution = VectorField.from_array(
+        self._nodal_solution = ArrayField.from_array(
             nodal_solution.reshape(-1, 6))
         if len(self._mesh.points) != len(self._nodal_solution):
             raise ValueError('shape of nodal_solution not correct')
@@ -106,10 +104,10 @@ class Frame(Readonly, metaclass=InhertSlotsABCMeta):
         return self._label_value
 
     @property
-    def nodal_solution(self) -> VectorField:
+    def nodal_solution(self) -> ArrayField:
         return self._nodal_solution
 
-    def __getitem__(self, key: str) -> float | ScalarField | VectorField:
+    def __getitem__(self, key: str) -> float | Field:
         if key == self.label:
             return self.label_value
         if key == 'translation':
@@ -126,17 +124,17 @@ class Frame(Readonly, metaclass=InhertSlotsABCMeta):
     def dof(self, index: SupportsIndex) -> ScalarField: ...
 
     @overload
-    def dof(self, index: Sequence[SupportsIndex]) -> VectorField: ...
+    def dof(self, index: Sequence[SupportsIndex]) -> ArrayField: ...
 
     def dof(self, index):
         """Get the corresponding dof value of nodal solution."""
         return self.nodal_solution.dof(index)
 
-    def translation(self) -> VectorField:
+    def translation(self) -> ArrayField:
         """Get the translational dofs of nodal solution."""
         return self.dof([0, 1, 2])
 
-    def rotation(self) -> VectorField:
+    def rotation(self) -> ArrayField:
         """Get the translational dofs of nodal solution."""
         return self.dof([3, 4, 5])
 

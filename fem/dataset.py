@@ -3,7 +3,7 @@
 from __future__ import annotations
 import abc
 from typing import overload, Type, Generic, TypeVar, Optional, Iterator, \
-    SupportsIndex, SupportsFloat, SupportsInt
+    SupportsIndex, SupportsFloat, SupportsInt, SupportsComplex
 from collections.abc import Sequence
 import numpy as np
 import numpy.typing as npt
@@ -18,10 +18,20 @@ except ImportError:
     from typing_extensions import Self
 
 
-__all__ = ('Point', 'Points',
-           'CellType', 'Vertex', 'Line', 'Quad', 'Hexahedron', 'Cells',
-           'ScalarField', 'VectorField',
-           'Dataset')
+__all__ = (
+    # Points
+    'Points',
+    # Cell types.
+    'CellType', 'Vertex', 'Line', 'Quad', 'Hexahedron',
+    # Cells
+    'Cells',
+    # Fields
+    'Field',
+    'ScalarField', 'FloatScalarField', 'ComplexScalarField',
+    'ArrayField', 'FloatArrayField', 'ComplexArrayField',
+    # Mesh and dataset
+    'Mesh', 'Dataset'
+)
 
 
 T = TypeVar('T')
@@ -47,7 +57,6 @@ class DatasetBase(Sequence,
         """
         self.__storage = SequenceView(storage)
 
-    @abc.abstractmethod
     def __repr__(self) -> str:
         return f"{self.__class__.__name__} object with {len(self)} data"
 
@@ -296,6 +305,12 @@ class Cells(DatasetBase[Cell]):
         for cell_list in cells_dict.values():
             yield(self.__class__(cell_list))
 
+    def __add__(self, other: Cells) -> Cells:
+        if isinstance(other, Cells):
+            return Cells(self.to_list() + other.to_list())
+        raise TypeError('unsupported operand type(s) for +: '
+                        f'{type(self)} and {type(other)}')
+
 
 class Field(DatasetBase[T]):
     """Base class for field data in the Dataset.
@@ -317,21 +332,57 @@ class Field(DatasetBase[T]):
     ScalarField, VectorField
     """
 
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__} object with {len(self)} data"
+    @abc.abstractmethod
+    def real(self) -> Field: ...
+
+    @abc.abstractmethod
+    def imag(self) -> Field: ...
+
+    @abc.abstractmethod
+    def abs(self) -> Field: ...
+    
+    @staticmethod
+    def from_array(array: npt.ArrayLike) -> Field:
+        _array = np.asarray(array)
+        if len(_array.shape) == 1:
+            return ScalarField.from_array(array)
+        if len(_array.shape) == 2:
+            return ArrayField.from_array(array)
+        raise ValueError('array should be 1- or 2-dimensional')
 
 
-class ScalarField(Field[float]):
+S = TypeVar('S', float, complex)
+
+
+class ScalarField(Field[S], Generic[S]):
+    """Traits for ScalarField and ComplexScalarField."""
+
+    def real(self) -> FloatScalarField:
+        return FloatScalarField([i.real for i in self])
+
+    def imag(self) -> FloatScalarField:
+        return FloatScalarField([i.imag for i in self])
+
+    def abs(self) -> FloatScalarField:
+        return FloatScalarField([abs(i) for i in self])
+
+    @staticmethod
+    def from_array(array: npt.ArrayLike) -> ScalarField:
+        _array = np.asarray(array)
+        if not len(_array.shape) == 1:
+            raise ValueError('array should be 1-dimensional')
+        if _array.imag.any():
+            return ComplexScalarField([i for i in _array])
+        return FloatScalarField([i for i in _array])
+
+
+class FloatScalarField(ScalarField[float]):
     """Field for scalar data.
 
     Parameters
     ----------
-    scalar : iterable
+    scalar : iterable of floating point numbers
         Data for each point or cell.
-
-    See Alse
-    --------
-    VectorField
     """
 
     def __init__(self, scalars: Sequence[SupportsFloat]):
@@ -345,9 +396,87 @@ class ScalarField(Field[float]):
                                 f' got {type(p)}')
         super().__init__(storage_list)
 
+    @staticmethod
+    def from_array(array: npt.ArrayLike) -> FloatScalarField:
+        _array = np.asarray(array)
+        if not len(_array.shape) == 1:
+            raise ValueError('array should be 1-dimensional')
+        return FloatScalarField([i for i in _array])
 
-class VectorField(Field[tuple[float, ...]]):
-    """ Field for vector data.
+
+class ComplexScalarField(ScalarField[complex]):
+    """Field for complex scalar data.
+
+    Parameters
+    ----------
+    scalar : iterable of complex numbers
+        Data for each point or cell.
+
+    """
+
+    def __init__(self, scalars: Sequence[complex | SupportsComplex]):
+        # Make sure point_list is only itered once in case it is an iterator.
+        storage_list = []
+        for p in scalars:
+            try:
+                storage_list.append(complex(p))
+            except (TypeError, ValueError):
+                raise TypeError('elements in scalars should be complex,'
+                                f' got {type(p)}')
+        super().__init__(storage_list)
+
+    @staticmethod
+    def from_array(array: npt.ArrayLike) -> ComplexScalarField:
+        _array = np.asarray(array)
+        if not len(_array.shape) == 1:
+            raise ValueError('array should be 1-dimensional')
+        return ComplexScalarField([i for i in _array])
+
+
+class ArrayField(Field[tuple[S, ...]], Generic[S]):
+    __slots__ = ('_dimension',)
+
+    @abc.abstractproperty
+    def dimension(self) -> int: ...
+
+    @overload
+    def dof(self, index: SupportsIndex) -> ScalarField: ...
+
+    @overload
+    def dof(self, index: Sequence[SupportsIndex]) -> ArrayField: ...
+
+    @abc.abstractmethod
+    def dof(self, index): ...
+
+    def norm(self) -> FloatScalarField:
+        return FloatScalarField([sum([abs(j) ** 2 for j in i]) ** .5
+                                 for i in self])
+
+    def real(self) -> FloatArrayField:
+        return FloatArrayField([[j.real for j in i] for i in self],
+                               dimension=self.dimension)
+
+    def imag(self) -> FloatArrayField:
+        return FloatArrayField([[j.imag for j in i] for i in self],
+                               dimension=self.dimension)
+
+    def abs(self) -> FloatArrayField:
+        return FloatArrayField([[abs(j) for j in i] for i in self],
+                               dimension=self.dimension)
+
+    @staticmethod
+    def from_array(array: npt.ArrayLike) -> ArrayField:
+        _array = np.asarray(array)
+        if not len(_array.shape) == 2:
+            raise ValueError('array should be 2-dimensional')
+        if _array.imag.any():
+            return ComplexArrayField([i for i in _array])
+        return FloatArrayField([i for i in _array])
+
+
+
+class FloatArrayField(ArrayField[float]):
+    """Field for arrays (vector of arbitrary length).
 
     Parameters
     ----------
@@ -355,35 +484,156 @@ class VectorField(Field[tuple[float, ...]]):
         Data for each point or cell.
     dimension : int, optional
         Length of the field data for each point or cell. (default to 3)
-
-    See Alse
-    --------
-    ScalarField
     """
 
-    __slots__ = ('_dimension',)
-
     def __init__(self,
-                 vectors: Sequence[Sequence[SupportsFloat]],
-                 dimension: SupportsInt = 3):
-        _dimension = int(dimension)
+                 arrays: Sequence[Sequence[SupportsFloat]],
+                 dimension: SupportsInt | None = None):
+        _dimension = (int(dimension) if isinstance(dimension, SupportsInt)
+                      else None)
         # Make sure point_list is only itered once in case it is an iterator.
         storage_list = []
-        for v in vectors:
+        for v in arrays:
             try:
                 elem = [float(i) for i in v]
+                if _dimension is None:
+                    _dimension = len(elem)
                 if not len(elem) == _dimension:
-                    raise ValueError('shape of `vectors` not correct')
+                    raise ValueError('shape of `arrays` not correct')
                 storage_list.append(tuple(elem))
             except Exception:
-                raise TypeError('elements in vectors should be'
+                raise TypeError('elements in arrays should be'
                                 ' a sequence of float')
+        if _dimension is None:
+            raise ValueError('cannot guess dimension of an empty sequence')
         super().__init__(storage_list)
         self._dimension = _dimension
 
     @property
     def dimension(self) -> int:
         return self._dimension
+
+    @overload
+    def dof(self, index: SupportsIndex) -> FloatScalarField: ...
+
+    @overload
+    def dof(self, index: Sequence[SupportsIndex]) -> FloatArrayField: ...
+
+    def dof(self, index):
+        if isinstance(index, SupportsIndex):
+            _index = index.__index__()
+            if -self.dimension <= _index < self.dimension:
+                return FloatScalarField([i[_index] for i in self])
+            raise IndexError('index out of range')
+        elif isinstance(index, Sequence):
+            return FloatArrayField((SequenceView(i)[index] for i in self),
+                                   dimension=len(index))
+
+    @staticmethod
+    def from_array(array: npt.ArrayLike) -> FloatArrayField:
+        _array = np.asarray(array)
+        if not len(_array.shape) == 2:
+            raise ValueError('array should be 2-dimensional')
+        return FloatArrayField([i for i in _array],
+                               dimension=_array.shape[1])
+
+
+class ComplexArrayField(ArrayField[complex]):
+    """Field for complex arrays (vector of arbitrary length).
+
+    Parameters
+    ----------
+    data : iterable
+        Data for each point or cell.
+    dimension : int, optional
+        Length of the field data for each point or cell. (default to 3)
+    """
+
+    def __init__(self,
+                 arrays: Sequence[Sequence[complex | SupportsComplex]],
+                 dimension: SupportsInt | None = None):
+        _dimension = (int(dimension) if isinstance(dimension, SupportsInt)
+                      else None)
+        # Make sure point_list is only itered once in case it is an iterator.
+        storage_list = []
+        for v in arrays:
+            try:
+                elem = [complex(i) for i in v]
+                if _dimension is None:
+                    _dimension = len(elem)
+                if not len(elem) == _dimension:
+                    raise ValueError('shape of `arrays` not correct')
+                storage_list.append(tuple(elem))
+            except Exception:
+                raise TypeError('elements in arrays should be'
+                                ' a sequence of float')
+        if _dimension is None:
+            raise ValueError('cannot guess dimension of an empty sequence')
+        super().__init__(storage_list)
+        self._dimension = _dimension
+
+    @property
+    def dimension(self) -> int:
+        return self._dimension
+
+    @overload
+    def dof(self, index: SupportsIndex) -> ComplexScalarField: ...
+
+    @overload
+    def dof(self, index: Sequence[SupportsIndex]) -> ComplexArrayField: ...
+
+    def dof(self, index):
+        if isinstance(index, SupportsIndex):
+            _index = index.__index__()
+            if -self.dimension <= _index < self.dimension:
+                return ComplexScalarField([i[_index] for i in self])
+            raise IndexError('index out of range')
+        elif isinstance(index, Sequence):
+            return ComplexArrayField((SequenceView(i)[index] for i in self),
+                                     dimension=len(index))
+
+    @staticmethod
+    def from_array(array: npt.ArrayLike) -> ComplexArrayField:
+        _array = np.asarray(array)
+        if not len(_array.shape) == 2:
+            raise ValueError('array should be 2-dimensional')
+        return ComplexArrayField([i for i in _array],
+                                 dimension=_array.shape[1])
+
+
+class Mesh(Readonly):
+    """Mesh is a collection of points and cells.
+
+    Parameters
+    ----------
+    points : Points
+        The nodes of a mesh.
+    cells : Cells, optional
+        The connectivity of a mesh.
+    """
+
+    __slots__ = ('__points', '__cells')
+
+    def __init__(self,
+                 points: Points,
+                 cells: Optional[Cells] = None,
+                 title: str = '',
+                 time: Optional[SupportsFloat] = None):
+        self.__points = points
+        self.__cells = Cells([]) if cells is None else cells
+
+    @property
+    def points(self) -> Points:
+        """List of points."""
+        return self.__points
+
+    @property
+    def cells(self) -> Cells:
+        """List of cells."""
+        return self.__cells
+
+    def to_dataset(self) -> Dataset:
+        return Dataset(self)
 
 
 class Dataset:
@@ -405,20 +655,20 @@ class Dataset:
         Additional information for time step.
     """
 
+    __slots__ = '__mesh', '__title', '__time', '__point_data', '__cell_data'
+
     def __init__(self,
-                 points: Points,
-                 cells: Optional[Cells] = None,
+                 mesh: Mesh,
                  title: str = '',
                  time: Optional[SupportsFloat] = None):
-        self._points = points
-        self._cells = Cells([]) if cells is None else cells
+        self.__mesh = mesh
 
         # self._title and self._time are set by attrbute setters.
         self.title = title
         self.time = time
 
-        self._point_data: dict[str, Field] = {}
-        self._cell_data: dict[str, Field] = {}
+        self.__point_data: dict[str, Field] = {}
+        self.__cell_data: dict[str, Field] = {}
 
     @property
     def title(self):
@@ -427,32 +677,36 @@ class Dataset:
     @title.setter
     def title(self, title: str):
         """Set the title for the dataset."""
-        self._title = str(title)
+        self.__title = str(title)
 
     @property
     def time(self) -> Optional[float]:
-        return self._time
+        return self.__time
 
     @time.setter
     def time(self, time: Optional[SupportsFloat]):
-        self._time = None if time is None else float(time)
+        self.__time = None if time is None else float(time)
+
+    @property
+    def mesh(self) -> Mesh:
+        return self.__mesh
 
     @property
     def points(self) -> Points:
         """List of points."""
-        return self._points
+        return self.mesh.points
 
     @property
     def cells(self) -> Cells:
         """List of cells."""
-        return self._cells
+        return self.mesh.cells
 
     @property
     def point_data(self) -> dict[str, Field]:
         """List of point data for the dataset."""
-        return self._point_data
+        return self.__point_data
 
     @property
     def cell_data(self) -> dict[str, Field]:
         """List of cell data for the dataset."""
-        return self._cell_data
+        return self.__cell_data
