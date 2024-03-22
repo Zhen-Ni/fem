@@ -31,7 +31,7 @@ class Assembly:
         _parts = list(parts)
         points = _parts[0].mesh.points
         for p in _parts[1:]:
-            if not points == p.points:
+            if not points == p.mesh.points:
                 raise ValueError(
                     'points array should be the same in each part')
         self._points = points

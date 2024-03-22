@@ -9,6 +9,7 @@ def get_mass_matrix_shell(nodes, elements, section):
     M = get_mass_matrix(density, thickness, elements, nodes)
     return M.tocoo()
 
+
 def get_stiffness_matrix_shell(nodes, elements, section):
     E = section.material.E
     nu = section.material.nu

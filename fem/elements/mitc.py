@@ -305,7 +305,7 @@ def get_stiffness_matrix(E, po, thick, elements, coordinates):
     # 形成单元刚度矩阵、坐标变换并装入整体刚度矩阵
         ke = km + kb + ks
         Ke = T.T.dot(ke).dot(T)
-        K[:, ii] = Ke.reshape(-1);
+        K[:, ii] = Ke.reshape(-1)
 
     DOF = np.array([6 * elements[:, 0] - 5, 6 * elements[:, 0] - 4, 6 * elements[:, 0] - 3, 6 * elements[:, 0] - 2, 6 * elements[:, 0] - 1, 6 * elements[:, 0],
                     6 * elements[:, 1] - 5, 6 * elements[:, 1] - 4, 6 * elements[:, 1] -

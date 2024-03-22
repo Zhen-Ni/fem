@@ -22,5 +22,6 @@ class TestSolidX(unittest.TestCase):
         self.assertTrue(np.allclose(mesh.t, mesh_ref.t))
         self.assertEqual(mesh.elem, mesh_ref.elem)
 
+
 if __name__ == '__main__':
     unittest.main(argv=[''], exit=False)

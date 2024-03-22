@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, final, Sequence, SupportsIndex, overload,\
 
 import numpy as np
 import numpy.typing as npt
-from scipy.sparse.linalg import eigsh
+from scipy.sparse.linalg import eigsh, spsolve
 
 from .common import SequenceView, Readonly, InhertSlotsABCMeta
 from .geometry import Vector
@@ -18,6 +18,9 @@ from .dataset import Points, Mesh, Dataset, Field, ScalarField, ArrayField,\
 
 if TYPE_CHECKING:
     from .model import Model
+
+
+__all__ = 'StaticSolver', 'ModalSolver'
 
 
 class Frame(Readonly, metaclass=InhertSlotsABCMeta):
@@ -239,12 +242,22 @@ class ModalSolver(Solver):
         K = self.model.K
         M = self.model.M
         freq, mode_shape = eigsh(K, self._order, M, self._frequency_shift,)
-        # Ignore the imaginary parts (if has imaginary parts).
         freq = np.sqrt(freq.real) / 2 / np.pi
-        index_array = np.argsort(freq)
+        index_array = np.argsort(freq.real)
         step = Step()
         for idx in index_array:
             f = freq[idx]
             x = mode_shape.T[idx]
             step.append(Frame(self.model.to_mesh(), x, 'frequency', f))
         return step
+
+
+class StaticSolver(Solver):
+    """Get the static deformation of the model."""
+
+    def __init__(self, model: Model):
+        super().__init__(model)
+
+    def solve(self) -> Step:
+        displacement = spsolve(self.model.K, self.model.F)
+        return Step([Frame(self.model.to_mesh(), displacement, 'static', 1.0)])

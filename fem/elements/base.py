@@ -3,6 +3,8 @@
 from __future__ import annotations
 import abc
 from typing import TYPE_CHECKING, TypeVar, Generic
+
+import numpy as np
 from scipy.sparse import csr_matrix, coo_matrix
 
 from ..section import Section, BeamSection, ShellSection, SolidSection
@@ -78,13 +80,15 @@ class MITC4(ElementASM[ShellSection]):
         nodes = mesh.points.to_array()
         elements = mesh.cells.to_array()
         return get_stiffness_matrix(section.material.E,
-                                    section.material.rho,
+                                    section.material.nu,
                                     section.h,
                                     elements,
                                     nodes).tocsr()
 
 
 class SolidX(ElementASM[SolidSection]):
+
+    ROTATION_STIFFNESS_FACTOR = 1e-60
 
     @staticmethod
     def get_mass_matrix(mesh: Mesh,
@@ -102,6 +106,9 @@ class SolidX(ElementASM[SolidSection]):
         from .solidx import get_stiffness_matrix_hexahedron
         mat = get_stiffness_matrix_hexahedron(mesh, section)
         mat = expand_dof(mat)
+        diag = np.diag([mat.trace() *
+                        SolidX.ROTATION_STIFFNESS_FACTOR] * mat.shape[0])
+        mat += type(mat)(diag)
         return mat.tocsr()
 
 

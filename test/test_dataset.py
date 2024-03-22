@@ -142,7 +142,7 @@ class TestField(unittest.TestCase):
         self.assertEqual(repr(field), 'ComplexScalarField object with 5 data')
         self.assertEqual(len(field), 5)
         self.assertTrue(isinstance(field[0], complex))
-        
+
         data = [1, 2, 3, 4, 5, 6]
         field = fem.FloatArrayField(np.array(data).reshape(2, 3))
         self.assertEqual(list(field), [(1, 2, 3), (4, 5, 6)])

@@ -53,7 +53,7 @@ class AbaqusInp:
         self._status = 'unknown'
         # Use `None` for unknown types.
         self._element_type: Type[Cell] | None = None
-        
+
         self._read(stream)
 
     def _read(self, stream: TextIO):
@@ -104,7 +104,6 @@ class AbaqusInp:
                                            f'{line_number}:'
                                            f'\n{line_content}')
 
-
     def _process_node(self, line_number: int, line_content: str):
         pattern = self.__class__._PATTERN_FLOAT
         words = [i.group() for i in re.finditer(pattern, line_content)]
@@ -114,7 +113,7 @@ class AbaqusInp:
                                        f"{line_number}:\n{line_content}")
         # We ignore the first number here as it is the index of the node.
         self._nodes.append(Point(*[float(i) for i in words[1:]]))
-        
+
     def _process_element(self, line_number: int, line_content: str):
         pattern = self.__class__._PATTERN_INTEGER
         words = re.findall(pattern, line_content)
@@ -129,10 +128,10 @@ class AbaqusInp:
         if len(words) - 1 != self._element_type.size:
             raise AbaqusInputFileError("number of numbers in `*Element`"
                                        " section not correct at line "
-                                       f"{line_number}:\n{line_content}")            
+                                       f"{line_number}:\n{line_content}")
         # Note that indexes in abaqus starts from 1, but here we starts from 0.
-        self._elements.append(self._element_type(*(int(i) - 1 for i in words[1:])))
-
+        self._elements.append(self._element_type(
+            *(int(i) - 1 for i in words[1:])))
 
     @property
     def mesh(self) -> Mesh:
@@ -145,4 +144,3 @@ def read_inp(filename: str) -> Mesh:
     with open(filename) as f:
         ds = AbaqusInp(f).mesh
     return ds
-        

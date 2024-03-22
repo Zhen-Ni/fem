@@ -36,7 +36,6 @@ class TestPart(unittest.TestCase):
         self.assertNotEqual(M.nnz, 0)
         self.assertNotEqual(K.nnz, 0)
 
-
     def test_solidpart(self):
         section = fem.SolidSection(fem.STEEL)
         nodes = fem.Points.from_array([[0, 0, 0],
@@ -59,6 +58,5 @@ class TestPart(unittest.TestCase):
         self.assertNotEqual(K.nnz, 0)
 
 
-        
 if __name__ == '__main__':
     unittest.main(argv=[''], exit=False)

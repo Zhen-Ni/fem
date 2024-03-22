@@ -2,6 +2,7 @@
 
 import numpy as np
 
+
 def repmat(mat, i, j):
     M, N = mat.shape
     res = np.zeros([M * i, N * j], dtype=mat.dtype)

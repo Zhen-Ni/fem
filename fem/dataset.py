@@ -340,7 +340,7 @@ class Field(DatasetBase[T]):
 
     @abc.abstractmethod
     def abs(self) -> Field: ...
-    
+
     @staticmethod
     def from_array(array: npt.ArrayLike) -> Field:
         _array = np.asarray(array)
@@ -402,6 +402,12 @@ class FloatScalarField(ScalarField[float]):
         if not len(_array.shape) == 1:
             raise ValueError('array should be 1-dimensional')
         return FloatScalarField([i for i in _array])
+
+    def max(self) -> float:
+        return max(self)
+
+    def min(self) -> float:
+        return min(self)
 
 
 class ComplexScalarField(ScalarField[complex]):
@@ -472,7 +478,6 @@ class ArrayField(Field[tuple[S, ...]], Generic[S]):
         if _array.imag.any():
             return ComplexArrayField([i for i in _array])
         return FloatArrayField([i for i in _array])
-
 
 
 class FloatArrayField(ArrayField[float]):
