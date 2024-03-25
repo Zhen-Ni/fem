@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import abc
 from typing import TYPE_CHECKING, final, Sequence, SupportsIndex, overload,\
-    Iterator, Optional
+    Iterator, Optional, TypeVar
 
 import numpy as np
 import numpy.typing as npt
+from scipy.sparse import csc_matrix, csr_matrix, spmatrix
 from scipy.sparse.linalg import eigsh, spsolve
 
 from .common import SequenceView, Readonly, InhertSlotsABCMeta
 from .geometry import Vector
-from .dataset import Points, Mesh, Dataset, Field, ScalarField, ArrayField,\
-    FloatArrayField, ComplexArrayField
+from .dataset import Points, Mesh, Dataset, Field, ScalarField, ArrayField
 
 
 if TYPE_CHECKING:
@@ -21,6 +21,10 @@ if TYPE_CHECKING:
 
 
 __all__ = 'StaticSolver', 'ModalSolver'
+
+
+class SolverError(Exception):
+    pass
 
 
 class Frame(Readonly, metaclass=InhertSlotsABCMeta):
@@ -49,8 +53,8 @@ class Frame(Readonly, metaclass=InhertSlotsABCMeta):
         The undeformed mesh of the finite element model.
     nodal_solution : npt.NDArray
         Should be 2-dimensional array with shape (6 *
-        len(mesh.points)) to represent 6 DOFs of each node. The order
-        of the dofs of the nodes follows that given by fem.DOF.
+        len(mesh.points), ) to represent 6 DOFs of each node. The
+        order of the dofs of the nodes follows that given by fem.DOF.
     label : str, optional
         The label of the frame. Can be set to an empty string. defaults
         to ''.
@@ -138,7 +142,7 @@ class Frame(Readonly, metaclass=InhertSlotsABCMeta):
         return self.dof([0, 1, 2])
 
     def rotation(self) -> ArrayField:
-        """Get the translational dofs of nodal solution."""
+        """Get the rotational dofs of nodal solution."""
         return self.dof([3, 4, 5])
 
     def deformed_mesh(self) -> Mesh:
@@ -241,6 +245,8 @@ class ModalSolver(Solver):
     def solve(self) -> Step:
         K = self.model.K
         M = self.model.M
+        # Needs to drop inactive dofs to avoid singularity
+        (K, M), active_dof = drop_inactive_dof(K, M)
         freq, mode_shape = eigsh(K, self._order, M, self._frequency_shift,)
         freq = np.sqrt(freq.real) / 2 / np.pi
         index_array = np.argsort(freq.real)
@@ -248,6 +254,7 @@ class ModalSolver(Solver):
         for idx in index_array:
             f = freq[idx]
             x = mode_shape.T[idx]
+            x = recover_inactive_dof(x, active_dof)
             step.append(Frame(self.model.to_mesh(), x, 'frequency', f))
         return step
 
@@ -259,5 +266,115 @@ class StaticSolver(Solver):
         super().__init__(model)
 
     def solve(self) -> Step:
-        displacement = spsolve(self.model.K, self.model.F)
-        return Step([Frame(self.model.to_mesh(), displacement, 'static', 1.0)])
+        (K,), active_dof = drop_inactive_dof(self.model.K)
+        if self.model.F[~active_dof].any():
+            raise SolverError('StaticSolver error: force applied '
+                              'on inactive dof')
+        displacement = spsolve(K, self.model.F[active_dof])
+        return Step([Frame(self.model.to_mesh(),
+                           recover_inactive_dof(displacement,
+                                                active_dof),
+                           'static', 1.0)])
+
+
+def recover_inactive_dof(x: npt.NDArray,
+                         active_dof: npt.NDArray[bool]
+                         ) -> npt.NDArray:
+    """Recover inactive dofs of nodal solution `x`.
+
+    The input `active_dof` is that return by `drop_inactive_dof`,
+    which indicates the inactive dofs in the original finite element
+    system.
+    """
+    x_recovered = np.zeros(len(active_dof), dtype=x.dtype)
+    x_recovered[active_dof] = x
+    return x_recovered
+
+
+def drop_inactive_dof(*mats: spmatrix
+                      ) -> tuple[list[csr_matrix],
+                                 npt.NDArray[bool]]:
+    """Drop inactive dofs in finite element matrixes `mats`.
+
+    A list of sparse matrixes with the same shape is given. The sparse
+    matrixes should have same number of rows and columns. Typical
+    example of input matrixes are [M, K] or [M, C, K] where M, C, K
+    are mass matrix, damping matrix and stiffness matrix,
+    respectively. The inactive dof `i` is defined that for matrix A,
+    A[i, :] and A[:, i] are all zeros (explicit zeros are ignored). If
+    a dof `i` is inactive in all input matrixes, it is removed by this
+    function. For the original input matrix, the dofs to be removed
+    are marked in another array `active_dof`, which is a ndarray of
+    booleans. The length of the array is the same as the size of the
+    original input matrixes, thus each of its element indicates a
+    dof. Thus, all remaining dofs are marked as `True` and removed
+    dofs are marked as `False` in the corresponding position of
+    `active_dof`.
+
+    Parameters
+    ----------
+    mats : list of sparse matrixes
+        A list of sparse matrixes of shape n * n.
+
+    Outputs
+    -------
+    results : list of csr_matrix
+        The corresponding sparse matrixes where empty dofs are moved.
+    active_dof : ndarray of bool
+        An array of shape n, True value indicates the corresponding
+        dof is kept, and False value indicates the dof is removed.
+    """
+    if len(mats) == 0:
+        raise ValueError('at least one sparse matrix should be provided')
+    active_dof = _get_active_dof(mats[0])
+    for mat in mats[1:]:
+        active_dof |= _get_active_dof(mat)  # type: ignore
+    results = [_trim_dof(m, active_dof) for m in mats]
+    return results, active_dof
+
+
+def _get_active_dof(mat: spmatrix) -> npt.NDArray[bool]:
+    """For given sparse matrix with shape n x n, get an array
+    indicating where corresponding row and columns are not all zeros.
+    """
+    nonzero_rows = _get_nonzero_inner(mat.tocsr())
+    nonzero_cols = _get_nonzero_inner(mat.tocsc())
+    return nonzero_cols | nonzero_rows  # type: ignore
+
+
+def _trim_dof(mat: spmatrix, keep: npt.NDArray[bool]) -> csr_matrix:
+    """Drop rows and columns indicated by `False` in `keep`."""
+    mat = _trim_inner(mat.tocsc(), keep)
+    mat = _trim_inner(mat.tocsr(), keep)
+    return mat
+
+
+_Spmat = TypeVar('_Spmat', csc_matrix, csr_matrix)
+
+
+def _trim_inner(mat: _Spmat, keep: npt.NDArray[bool]) -> _Spmat:
+    """Drop rows (csr_matrix) or columns (csc_matrix) or of the matrix
+    indicated by `False` in `keep`, and keep rows or columns indicated
+    by `True` in `keep`.
+
+    This is hinted by [[https://github.com/scipy/scipy/issues/6754]].
+    """
+    new_indptr = mat.indptr[np.append(True, keep)]
+    if isinstance(mat, csr_matrix):
+        new_shape = (np.count_nonzero(keep), mat.shape[1])
+    elif isinstance(mat, csc_matrix):
+        new_shape = (mat.shape[0], np.count_nonzero(keep))
+    new_mat = type(mat)((mat.data, mat.indices, new_indptr),
+                        shape=new_shape)
+    return new_mat
+
+
+def _get_nonzero_inner(mat: csc_matrix | csr_matrix) -> npt.NDArray[bool]:
+    """Get non-empty row indexes for csr matrix, and column indexes
+    for csc matrix.
+
+    This is hinted by [[https://github.com/scipy/scipy/issues/6754]].
+    """
+    inner_nnz = np.diff(mat.indptr)
+    nonzero = (inner_nnz != 0)
+    return nonzero
