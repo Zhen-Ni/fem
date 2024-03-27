@@ -317,7 +317,8 @@ class Field(DatasetBase[T]):
 
     An instance of the `Field` class defines a named field for point
     data or cell data. The field data is a sequence of scalars or
-    vectors. Users should use `ScalarField` or `VectorField` for
+    vectors. Users should use `FloatScalarField` ,
+    `ComplexScalarField`, `FloatArrayField` or `FloatVectorField` for
     instantiation `Field` objects.
 
     Parameters
@@ -330,6 +331,7 @@ class Field(DatasetBase[T]):
     See Alse
     --------
     ScalarField, VectorField
+
     """
 
     @abc.abstractmethod
@@ -355,7 +357,7 @@ S = TypeVar('S', float, complex)
 
 
 class ScalarField(Field[S], Generic[S]):
-    """Traits for ScalarField and ComplexScalarField."""
+    """Traits for FloatScalarField and ComplexScalarField."""
 
     def real(self) -> FloatScalarField:
         return FloatScalarField([i.real for i in self])
@@ -374,6 +376,10 @@ class ScalarField(Field[S], Generic[S]):
         if _array.imag.any():
             return ComplexScalarField([i for i in _array])
         return FloatScalarField([i for i in _array])
+
+    @abc.abstractmethod
+    def to_array_field(self) -> ArrayField:
+        """Convert ScalarField object to 1-d ArrayField object."""
 
 
 class FloatScalarField(ScalarField[float]):
@@ -409,6 +415,11 @@ class FloatScalarField(ScalarField[float]):
     def min(self) -> float:
         return min(self)
 
+    def to_array_field(self) -> FloatArrayField:
+        """Convert FloatScalarField object to 1-d FloatArrayField
+        object."""
+        return FloatArrayField([[i] for i in self])
+
 
 class ComplexScalarField(ScalarField[complex]):
     """Field for complex scalar data.
@@ -438,8 +449,15 @@ class ComplexScalarField(ScalarField[complex]):
             raise ValueError('array should be 1-dimensional')
         return ComplexScalarField([i for i in _array])
 
+    def to_array_field(self) -> ComplexArrayField:
+        """Convert ComplexScalarField object to 1-d ComplexArrayField
+        object."""
+        return ComplexArrayField([[i] for i in self])
+
 
 class ArrayField(Field[tuple[S, ...]], Generic[S]):
+    """Traits for FloatArrayField and ComplexArrayField."""
+
     __slots__ = ('_dimension',)
 
     @abc.abstractproperty
@@ -677,7 +695,7 @@ class Dataset:
 
     @property
     def title(self):
-        return self._title
+        return self.__title
 
     @title.setter
     def title(self, title: str):

@@ -38,6 +38,7 @@ class Point(XYZBase):
     def __repr__(self):
         return f"Point: ({self.x}, {self.y}, {self.z})"
 
+    @property
     def coordinates(self) -> tuple[float, float, float]:
         return self.x, self.y, self.z
 
