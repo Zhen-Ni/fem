@@ -178,7 +178,7 @@ class Step:
         self.__frames.append(frame)
 
     def __repr__(self):
-        return "Step object with {n} frames".format(n=len(self._frames))
+        return "Step object with {n} frames".format(n=len(self.__frames))
 
     def __len__(self) -> int:
         return len(self.__frames)
