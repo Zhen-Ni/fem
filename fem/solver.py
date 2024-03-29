@@ -11,7 +11,7 @@ import numpy.typing as npt
 from scipy.sparse import csc_matrix, csr_matrix, spmatrix
 from scipy.sparse.linalg import eigsh, spsolve
 
-from .common import SequenceView, Readonly, InhertSlotsABCMeta
+from .common import SequenceView, Readonly, InhertSlotsABCMeta, warn
 from .geometry import Vector
 from .dataset import Points, Mesh, Dataset, Field, ScalarField, ArrayField
 
@@ -228,6 +228,8 @@ class ModalSolver(Solver):
     considered.
     """
 
+    TOL = 1e-3
+
     def __init__(self,
                  model: Model,
                  order: int = 20,
@@ -245,10 +247,22 @@ class ModalSolver(Solver):
     def solve(self) -> Step:
         K = self.model.K
         M = self.model.M
-        # Needs to drop inactive dofs to avoid singularity
+
+        # Drop inactive dofs to avoid singularity
         (K, M), active_dof = drop_inactive_dof(K, M)
-        freq, mode_shape = eigsh(K, self._order, M, self._frequency_shift,)
-        freq = np.sqrt(freq.real) / 2 / np.pi
+        eigv, mode_shape = eigsh(K, self._order, M, self._frequency_shift,)
+        # Handle negative eigenvalues.
+        # If negative eigenvalue is small (defined by class variable
+        # `TOL`), it is set to 0 directly. If it is smaller than -TOL,
+        # a warning message is shown and the value is left as is,
+        # which leads to `nan` value in the natural frequency.
+        for i, val in enumerate(eigv):
+            if val < -self.TOL:
+                warn(f'negative eigen value {val} detected')
+            elif val < 0.0:
+                eigv[i] = 0.0
+
+        freq = np.sqrt(eigv.real) / 2 / np.pi
         index_array = np.argsort(freq.real)
         step = Step()
         for idx in index_array:

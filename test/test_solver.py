@@ -109,6 +109,21 @@ class TestSolver(unittest.TestCase):
         self.assertAlmostEqual(frame.translation().norm().max(), 2.381e-2,
                                delta=0.01e-2)
 
+    def test_modal_beam1d_free_free(self):
+        width = 0.1
+        height = 0.02
+        section = fem.BeamSection.rectangular(fem.STEEL, width, height)
+        ds = fem.io.read_inp('test/beam-1d.inp')
+        part = fem.BeamPart(ds, section)
+        asm = fem.Assembly([part])
+        model = fem.Model(asm)
+        solver = fem.ModalSolver(model)
+        results = solver.solve()
+
+        # Should have 6 rigid body modes.
+        for i in range(6):
+            self.assertAlmostEqual(results[i]['frequency'], 0.0, delta=1e-3)
+        
     def test_static_beam2d(self):
         thickness = 0.02
         steel = fem.Material(210e9, 0.3, 7850)

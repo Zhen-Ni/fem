@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
+import sys
 import abc
 from enum import Enum, IntEnum
 from collections.abc import Sequence
@@ -31,6 +32,11 @@ class DOF(IntEnum):
     RX = 3
     RY = 4
     RZ = 5
+
+
+def warn(msg: str):
+    sys.stderr.write(msg)
+    sys.stderr.write('\n')
 
 
 @overload
