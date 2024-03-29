@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-# import xml.etree.ElementTree as ET
 from typing import TextIO, Literal
 
 import vtk
@@ -50,7 +49,7 @@ def write_vtu(stream: TextIO,
         case 'lz4':
             writer.SetCompressorTypeToLZ4()
         case 'zlib':
-            writer.SetCompressorTypeToZLIB()
+            writer.SetCompressorTypeToZLib()
         case 'lzma':
             writer.SetCompressorTypeToLZMZ()
         case _:

@@ -123,7 +123,7 @@ class TestSolver(unittest.TestCase):
         # Should have 6 rigid body modes.
         for i in range(6):
             self.assertAlmostEqual(results[i]['frequency'], 0.0, delta=1e-3)
-        
+
     def test_static_beam2d(self):
         thickness = 0.02
         steel = fem.Material(210e9, 0.3, 7850)
