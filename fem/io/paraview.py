@@ -11,7 +11,7 @@ from .vtk import write_vtu
 if TYPE_CHECKING:
     from ..dataset import Dataset
 
-__all__ = 'export_pvd',
+__all__ = ('export_pvd',)
 
 
 def export_pvd(datasets: Sequence[Dataset], name: str, path: str = ''):
@@ -49,7 +49,7 @@ def export_pvd(datasets: Sequence[Dataset], name: str, path: str = ''):
              xml_declaration=True)
 
     # Create the folder and its contents.
-    os.makedirs(name, exist_ok=True)
+    os.makedirs(os.path.join(path, name), exist_ok=True)
     for i, d in enumerate(datasets):
         with open(os.path.join(path, name, f'{name}-{i}.vtu'), 'w') as f:
             write_vtu(f, d, 'appended', 'zlib')
