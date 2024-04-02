@@ -148,7 +148,7 @@ class SequenceView(Sequence,
             return self.__class__(self, index)
         raise TypeError(
             f'{self.__class__.__name__} indices must be integers, slices, '
-            f'or a sequence of integers,  not {type(index)}')
+            f'or a sequence of integers, not {type(index)}')
 
     def __len__(self) -> int:
         return len(self.__indexes)
