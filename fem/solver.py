@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, final, Sequence, SupportsIndex, overload,\
+from typing import TYPE_CHECKING, final, SupportsIndex, overload,\
     Iterator, Optional, TypeVar
+from collections.abc import Sequence
 
 import numpy as np
 import numpy.typing as npt
@@ -165,11 +166,11 @@ class Frame(Readonly, metaclass=InhertSlotsABCMeta):
 
 
 @final
-class Step:
+class Step(Sequence):
     """A collection of frames storing the analysis result.
     """
 
-    __slots__ = ('__frames')
+    __slots__ = ('__frames',)
 
     def __init__(self, frames: Sequence[Frame] | None = None):
         self.__frames = [] if frames is None else list(frames)
@@ -182,10 +183,6 @@ class Step:
 
     def __len__(self) -> int:
         return len(self.__frames)
-
-    def __iter__(self) -> Iterator[Frame]:
-        for f in self.__frames:
-            yield f
 
     @overload
     def __getitem__(self, index: SupportsIndex) -> Frame: ...
