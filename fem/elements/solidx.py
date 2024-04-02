@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Type
 
 if TYPE_CHECKING:
     from scipy.sparse import coo_matrix
-    from ..dataset import Points, Cells, Mesh
+    from ..dataset import Mesh
     from ..section import SolidSection
 
 

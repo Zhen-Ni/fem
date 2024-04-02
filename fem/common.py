@@ -18,6 +18,7 @@ __all__ = 'empty', 'CellType', 'DOF'
 
 
 class CellType(Enum):
+    """Cell types are the same as VTK."""
     VERTEX = 1
     LINE = 3
     QUAD = 9
@@ -34,7 +35,8 @@ class DOF(IntEnum):
     RZ = 5
 
 
-def warn(msg: str):
+def warn(msg: str) -> None:
+    """Give warning messages."""
     sys.stderr.write(msg)
     sys.stderr.write('\n')
 
@@ -74,7 +76,7 @@ class Readonly:
 
 
 class InhertSlotsABCMeta(abc.ABCMeta):
-    """A meta class to to build abstract class with slots.
+    """Meta class to to build abstract class with slots.
 
     An empty __slots__ is defined in the constructed classes if the
     class doesn't define its own __slots__ attribute. Thus, all
@@ -95,7 +97,7 @@ class SequenceView(Sequence,
                    Readonly,
                    Generic[T],
                    metaclass=InhertSlotsABCMeta):
-    """Get an immutable view object of given sequence."""
+    """Give an immutable view object of given sequence."""
 
     __slots__ = '__sequence', '__indexes'
 
