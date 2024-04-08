@@ -86,6 +86,10 @@ class DatasetBase(Sequence,
         return len(self.__storage)
 
     def __eq__(self, other) -> bool:
+        # Directly return True to avoid loop if `self` and `other` are
+        # the same object.
+        if self is other:
+            return True
         if not type(self) == type(other):
             return False
         if len(self) != len(other):
@@ -103,7 +107,8 @@ class Points(DatasetBase[Point]):
     """Class for storing the nodes of a mesh."""
 
     def __init__(self, point_list: Sequence[Point]):
-        # Make sure point_list is only itered once in case it is an iterator.
+        # Make sure point_list is only itered once in case it is an
+        # iterator.
         storage_list = []
         for p in point_list:
             if isinstance(p, Point):
@@ -175,6 +180,7 @@ class Cell(Readonly, abc.ABC):
 
 
 class Vertex(Cell):
+    """Cell with only one single point."""
     id = CellType.VERTEX
     size = 1
 
@@ -245,7 +251,8 @@ class Cells(DatasetBase[Cell]):
     """
 
     def __init__(self, cell_list: Sequence[Cell]):
-        # Make sure point_list is only itered once in case it is an iterator.
+        # Make sure point_list is only itered once in case it is an
+        # iterator.
         storage_list = []
         for c in cell_list:
             if isinstance(c, Cell):
@@ -299,6 +306,7 @@ class Cells(DatasetBase[Cell]):
         return res
 
     def split(self) -> Iterator[Cells]:
+        """Split into several Cells object with the same cell type."""
         cells_dict: dict[Type[Cell], list[Cell]] = {}
         for cell in self:
             cells_dict.setdefault(cell.id, []).append(cell)
@@ -374,8 +382,8 @@ class ScalarField(Field[S], Generic[S]):
         if not len(_array.shape) == 1:
             raise ValueError('array should be 1-dimensional')
         if _array.imag.any():
-            return ComplexScalarField([i for i in _array])
-        return FloatScalarField([i for i in _array])
+            return ComplexScalarField(list(_array))
+        return FloatScalarField(list(_array))
 
     @abc.abstractmethod
     def to_array_field(self) -> ArrayField:
@@ -407,7 +415,7 @@ class FloatScalarField(ScalarField[float]):
         _array = np.asarray(array)
         if not len(_array.shape) == 1:
             raise ValueError('array should be 1-dimensional')
-        return FloatScalarField([i for i in _array])
+        return FloatScalarField(list(_array))
 
     def max(self) -> float:
         return max(self)
