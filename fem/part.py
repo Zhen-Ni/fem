@@ -43,12 +43,8 @@ class Part(abc.ABC, Generic[SECTION]):
 
     Parameters
     ----------
-    points : Points
-        The coordinates of the points. The same `Points` object should be used
-        for all `Part` objects in the model.
-    cells : Cells
-        Cell object containg the nodes of the cell. Note that different
-        cell types may exist in the same part.
+    mesh: Mesh
+        The mesh object containing the points and cells information.
     section : Section object
         The section of the part.
 
@@ -159,13 +155,13 @@ class BeamPart(Part[BeamSection]):
 
     Parameters
     ----------
-    points : Points
-        The coordinates of the points. The same `Points` object should be used
-        for all `Part` objects in the model.
-    cells : Cells
-        Cell object containg the nodes of the cell.
+    mesh: Mesh
+        The mesh object containing the points and cells information.
     section : Section object
         The section of the part.
+    n1: Vector or XYZType, optional
+        Set the n1 direction of the cross section for the beam.
+        Defaults to (0., 1., 0.)
     """
 
     element_asm = Beam2
@@ -209,11 +205,8 @@ class ShellPart(Part[ShellSection]):
 
     Parameters
     ----------
-    points : Points
-        The coordinates of the points. The same `Points` object should be used
-        for all `Part` objects in the model.
-    cells : Cells
-        Cell object containg the nodes of the cell.
+    mesh: Mesh
+        The mesh object containing the points and cells information.
     section : Section object
         The section of the part.
     """
@@ -228,11 +221,8 @@ class SolidPart(Part[SolidSection]):
 
     Parameters
     ----------
-    points : Points
-        The coordinates of the points. The same `Points` object should be used
-        for all `Part` objects in the model.
-    cells : Cells
-        Cell object containg the nodes of the cell.
+    mesh: Mesh
+        The mesh object containing the points and cells information.
     section : Section object
         The section of the part.
     """
