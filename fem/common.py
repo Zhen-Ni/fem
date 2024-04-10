@@ -129,8 +129,11 @@ class SequenceView(Sequence,
             raise TypeError('indexes must be Sequence, slice or None,'
                             f' got {type(indexes)}')
 
+    def __str__(self) -> str:
+        return str(self.__sequence)
+
     def __repr__(self) -> str:
-        return '<View [' + ', '.join([repr(i) for i in self]) + ']>'
+        return prefix(repr(self.__sequence), 'View<') + '>'
 
     @overload
     def __getitem__(self, index: SupportsIndex) -> T: ...
@@ -172,3 +175,13 @@ class SequenceView(Sequence,
             if p1 != p2:
                 return False
         return True
+
+
+def prefix(content: str, prefix: str) -> str:
+    """Add prefix to the first line of content and indent the
+    following lines."""
+    s_list = content.split('\n')
+    result = [prefix + s_list[0]]
+    for si in s_list[1:]:
+        result.append(' ' * len(prefix) + si)
+    return '\n'.join(result)
