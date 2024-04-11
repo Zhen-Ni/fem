@@ -90,7 +90,7 @@ class DatasetBase(Sequence,
         # the same object.
         if self is other:
             return True
-        if not type(self) == type(other):
+        if not type(self) is type(other):
             return False
         if len(self) != len(other):
             return False
@@ -136,7 +136,7 @@ class Points(DatasetBase[Point]):
         """
         return Points([Point(*row) for row in np.asarray(array)])
 
-    def to_array(self) -> npt.NDArray[float]:
+    def to_array(self) -> npt.NDArray[np.float64]:
         return np.array([[p.x, p.y, p.z] for p in self])
 
     @property
@@ -311,7 +311,7 @@ class Cells(DatasetBase[Cell]):
         for cell in self:
             cells_dict.setdefault(cell.id, []).append(cell)
         for cell_list in cells_dict.values():
-            yield(self.__class__(cell_list))
+            yield self.__class__(cell_list)
 
     def __add__(self, other: Cells) -> Cells:
         if isinstance(other, Cells):

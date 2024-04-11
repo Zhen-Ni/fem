@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import abc
-from typing import TYPE_CHECKING, final, SupportsIndex, overload,\
-    Iterator, Optional, TypeVar
+from typing import TYPE_CHECKING, final, SupportsIndex, overload, \
+    Optional, TypeVar
 from collections.abc import Sequence
 
 import numpy as np
@@ -289,7 +289,7 @@ class StaticSolver(Solver):
 
 
 def recover_inactive_dof(x: npt.NDArray,
-                         active_dof: npt.NDArray[bool]
+                         active_dof: npt.NDArray[np.bool_]
                          ) -> npt.NDArray:
     """Recover inactive dofs of nodal solution `x`.
 
@@ -304,7 +304,7 @@ def recover_inactive_dof(x: npt.NDArray,
 
 def drop_inactive_dof(*mats: spmatrix
                       ) -> tuple[list[csr_matrix],
-                                 npt.NDArray[bool]]:
+                                 npt.NDArray[np.bool_]]:
     """Drop inactive dofs in finite element matrixes `mats`.
 
     A list of sparse matrixes with the same shape is given. The sparse
@@ -344,7 +344,7 @@ def drop_inactive_dof(*mats: spmatrix
     return results, active_dof
 
 
-def _get_active_dof(mat: spmatrix) -> npt.NDArray[bool]:
+def _get_active_dof(mat: spmatrix) -> npt.NDArray[np.bool_]:
     """For given sparse matrix with shape n x n, get an array
     indicating where corresponding row and columns are not all zeros.
     """
@@ -353,7 +353,7 @@ def _get_active_dof(mat: spmatrix) -> npt.NDArray[bool]:
     return nonzero_cols | nonzero_rows  # type: ignore
 
 
-def _trim_dof(mat: spmatrix, keep: npt.NDArray[bool]) -> csr_matrix:
+def _trim_dof(mat: spmatrix, keep: npt.NDArray[np.bool_]) -> csr_matrix:
     """Drop rows and columns indicated by `False` in `keep`."""
     mat = _trim_inner(mat.tocsc(), keep)
     mat = _trim_inner(mat.tocsr(), keep)
@@ -363,7 +363,7 @@ def _trim_dof(mat: spmatrix, keep: npt.NDArray[bool]) -> csr_matrix:
 _Spmat = TypeVar('_Spmat', csc_matrix, csr_matrix)
 
 
-def _trim_inner(mat: _Spmat, keep: npt.NDArray[bool]) -> _Spmat:
+def _trim_inner(mat: _Spmat, keep: npt.NDArray[np.bool_]) -> _Spmat:
     """Drop rows (csr_matrix) or columns (csc_matrix) or of the matrix
     indicated by `False` in `keep`, and keep rows or columns indicated
     by `True` in `keep`.
@@ -380,7 +380,7 @@ def _trim_inner(mat: _Spmat, keep: npt.NDArray[bool]) -> _Spmat:
     return new_mat
 
 
-def _get_nonzero_inner(mat: csc_matrix | csr_matrix) -> npt.NDArray[bool]:
+def _get_nonzero_inner(mat: csc_matrix | csr_matrix) -> npt.NDArray[np.bool_]:
     """Get non-empty row indexes for csr matrix, and column indexes
     for csc matrix.
 

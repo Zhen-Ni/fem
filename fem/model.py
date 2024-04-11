@@ -34,7 +34,7 @@ class Model:
         # The format of `self._forces_gravity` is:
         # list[tuple[gravity_acceration, normalized_direction]]
         self._forces_gravity: list[tuple[float, Vector]] = []
-        self._force_vector: npt.NDArray[float] | None = None
+        self._force_vector: npt.NDArray[np.float64] | None = None
         self._is_initialized = False
 
     @property
@@ -132,7 +132,7 @@ class Model:
             self._forces_gravity.pop(idx)
         return self
 
-    def _get_force_vector(self) -> npt.NDArray[float]:
+    def _get_force_vector(self) -> npt.NDArray[np.float64]:
         F = np.zeros(self._assembly.K.shape[0], dtype=float)
         for f, dof in self._forces:
             F[dof] += f
@@ -158,7 +158,7 @@ class Model:
         return self._assembly.C
 
     @property
-    def F(self) -> npt.NDArray[float]:
+    def F(self) -> npt.NDArray[np.float64]:
         self._initialize()
         # self._force_vector is set in self._initialize, thus it
         # should be an array.
