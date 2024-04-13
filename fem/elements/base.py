@@ -23,12 +23,14 @@ SECTION = TypeVar('SECTION', bound=Section)
 class ElementASM(abc.ABC, Generic[SECTION]):
     """Abstract base class for assemble element matrixes."""
 
-    @abc.abstractstaticmethod
+    @staticmethod
+    @abc.abstractmethod
     def get_mass_matrix(mesh: Mesh,
                         section: SECTION,
                         **kwargs) -> csr_matrix: ...
 
-    @abc.abstractstaticmethod
+    @staticmethod
+    @abc.abstractmethod
     def get_stiffness_matrix(mesh: Mesh,
                              section: SECTION,
                              **kwargs) -> csr_matrix: ...

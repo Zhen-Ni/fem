@@ -16,10 +16,12 @@ if TYPE_CHECKING:
 
 
 class MeshMap(abc.ABC):
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def index_map(self) -> tuple[int, ...]: ...
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def elem(self) -> Type[skfem.Element]: ...
 
     @classmethod

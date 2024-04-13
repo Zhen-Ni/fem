@@ -3,19 +3,13 @@
 from __future__ import annotations
 import abc
 from typing import overload, Type, Generic, TypeVar, Optional, Iterator, \
-    SupportsIndex, SupportsFloat, SupportsInt, SupportsComplex
+    SupportsIndex, SupportsFloat, SupportsInt, SupportsComplex, Self
 from collections.abc import Sequence
 import numpy as np
 import numpy.typing as npt
 
 from .common import CellType, SequenceView, Readonly, InhertSlotsABCMeta
 from .geometry import Point
-
-try:
-    # Available for sys.version > "3.11".
-    from typing import Self
-except ImportError:
-    from typing_extensions import Self
 
 
 __all__ = (

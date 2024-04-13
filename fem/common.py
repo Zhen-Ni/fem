@@ -5,16 +5,10 @@ import sys
 import abc
 from enum import Enum, IntEnum
 from collections.abc import Sequence
-from typing import Generic, Type, TypeVar, overload, SupportsIndex
-
-try:
-    # Available for sys.version > "3.11".
-    from typing import Self
-except ImportError:
-    Self = TypeVar('Self')
+from typing import Generic, Type, TypeVar, overload, SupportsIndex, Self
 
 
-__all__ = 'empty', 'CellType', 'DOF'
+__all__ = ('empty', 'CellType', 'DOF')
 
 
 class CellType(Enum):
