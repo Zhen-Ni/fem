@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Optional, SupportsIndex
 
 import numpy as np
 
-from .common import empty, SequenceView
+from .common import empty, SequenceView, DOF
 from .geometry import Vector, XYZType
 from .dataset import Points, Dataset, FloatArrayField, Mesh
 
@@ -57,7 +57,7 @@ class Model:
         self._force_vector = self._get_force_vector()
         self._is_initialized = True
 
-    def add_force(self, f: float, node: int, dof: int) -> Model:
+    def add_force(self, f: float, node: int, dof: DOF) -> Model:
         """Add force to the model.
 
         Parameters
@@ -66,7 +66,7 @@ class Model:
             Force.
         node : int
             The index of the node.
-        dof : int
+        dof : DOF
             The degree of freedom of the node.
         """
         self._uninitialize()
