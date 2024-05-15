@@ -168,16 +168,15 @@ class Model:
     def to_mesh(self) -> Mesh:
         return self.assembly.to_mesh()
 
-    @property
     def to_dataset(self) -> Dataset:
         mesh = self.assembly.to_mesh()
         dataset = Dataset(mesh)
 
-        force = empty(len(self.points), 3)
-        moment = empty(len(self.points), 3)
+        force = empty(len(self.points), 3, initial=0.)
+        moment = empty(len(self.points), 3, initial=0.)
         for (f, dof) in self._forces:
             index = dof // 6
-            direction = index % 6
+            direction = dof % 6
             if direction < 3:
                 force[index][direction] += f
             else:

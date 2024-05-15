@@ -5,7 +5,7 @@ import sys
 import abc
 from enum import Enum, IntEnum
 from collections.abc import Sequence
-from typing import Generic, Type, TypeVar, overload, SupportsIndex, Self
+from typing import Generic, Type, TypeVar, overload, SupportsIndex, Self, Any
 
 
 __all__ = ('empty', 'CellType', 'DOF')
@@ -36,18 +36,18 @@ def warn(msg: str) -> None:
 
 
 @overload
-def empty() -> None: ...
+def empty(initial: Any = None) -> Any: ...
 
 
 @overload
-def empty(dim0: int, *dimensions: int) -> list: ...
+def empty(dim0: int, *dimensions: int, initial: Any = None) -> list: ...
 
 
-def empty(*dimensions):
+def empty(*dimensions, initial=None):
     """Create a multi-dimensional list filled with Nones."""
     if dimensions:
         return [empty(*dimensions[1:]) for i in range(dimensions[0])]
-    return None
+    return initial
 
 
 class Readonly:
